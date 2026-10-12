@@ -216,11 +216,37 @@ export default function App() {
               }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500 transition"
             >
-              {LANDING_SITES.map((site) => (
-                <option key={site.id} value={site.id}>
-                  {site.name} ({site.region}) {site.isOcean ? '🌊' : '🏞️'}
-                </option>
-              ))}
+              <optgroup label="🌊 Coastal Marine (Indian Ocean)">
+                {LANDING_SITES.filter((s) => s.region === 'Coast').map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name} ({site.county} County)
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="⛵ Lake Victoria">
+                {LANDING_SITES.filter((s) => s.region === 'Lake Victoria').map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name} ({site.county} County)
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="🏔️ Rift Valley Lakes">
+                {LANDING_SITES.filter((s) => s.region === 'Rift Valley').map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name} ({site.county} County)
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="🌊 Inland Dams & Rivers">
+                {LANDING_SITES.filter((s) => s.region === 'Inland Dams/Rivers').map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name} ({site.county} County)
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
 
