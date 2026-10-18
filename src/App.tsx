@@ -2,95 +2,81 @@ import { useState, useEffect, useMemo } from 'react';
 import { LANDING_SITES, type LandingSite } from './data/sites';
 import { DEMO_SCENARIOS } from './data/demoScenarios';
 import { evaluateRisk, type RiskLevel, type WeatherMetrics } from './lib/riskEngine';
-import { weatherClient, summarizeHours, toWeatherMetrics, friendlyMessage, type HourlyPoint } from './lib/weather';
+import { weatherClient, summarizeHours, toWeatherMetrics, friendlyMessage } from './lib/weather';
 import { marineClient } from './lib/marine/marineClient';
 import { getWorstWaveHeight } from './lib/marine/marineBridge';
-import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, WifiOff, Loader2, Map as MapIcon, Home as HomeIcon, Menu, X } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, WifiOff, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Compass, Thermometer, Wind, Waves, Eye, Menu, X, Sun } from 'lucide-react';
 import { MapView } from './components/MapView';
 
-const WINDOW_HOURS = 12;
 const KMH_PER_KNOT = 1.852;
 const LAKE_WAVE_PER_KNOT = 0.04;
 
-const RISK_STYLES: Record<RiskLevel, { card: string; bar: string; label: string }> = {
+const RISK_STYLES: Record<RiskLevel, { card: string; bar: string; label: string; text: string }> = {
   SAFE: {
-    card: 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200',
-    bar: 'bg-emerald-400',
-    label: 'Conditions are good. Normal precautions apply.',
+    card: 'bg-emerald-600 text-white shadow-lg border-emerald-500',
+    bar: 'bg-white',
+    label: 'Good conditions for fishing today.',
+    text: 'text-white',
   },
   CAUTION: {
-    card: 'bg-amber-950/30 border-amber-500/40 text-amber-200',
-    bar: 'bg-amber-400',
-    label: 'Fishing is possible, but stay alert and stay close to shore.',
+    card: 'bg-amber-500 text-slate-950 shadow-lg border-amber-400',
+    bar: 'bg-slate-950',
+    label: 'Fishing possible, but stay close to shore.',
+    text: 'text-slate-950',
   },
   DANGER: {
-    card: 'bg-orange-950/30 border-orange-500/40 text-orange-200',
-    bar: 'bg-orange-400',
-    label: 'Do not go out. Conditions are dangerous for small boats.',
+    card: 'bg-orange-600 text-white shadow-lg border-orange-500',
+    bar: 'bg-white',
+    label: 'Dangerous conditions for small crafts.',
+    text: 'text-white',
   },
   EXTREME: {
-    card: 'bg-rose-950/30 border-rose-500/40 text-rose-200',
-    bar: 'bg-rose-500',
+    card: 'bg-rose-600 text-white shadow-lg border-rose-500',
+    bar: 'bg-white',
     label: 'Stay on land. Conditions are life-threatening.',
+    text: 'text-white',
   },
 };
 
 function RiskIcon({ level }: { level: RiskLevel }) {
-  if (level === 'SAFE') return <CheckCircle2 className="w-10 h-10 text-emerald-400" />;
-  if (level === 'CAUTION') return <AlertTriangle className="w-10 h-10 text-amber-400" />;
-  if (level === 'DANGER') return <ShieldAlert className="w-10 h-10 text-orange-400" />;
-  return <OctagonAlert className="w-10 h-10 text-rose-400" />;
-}
-
-function upcomingHours(hours: HourlyPoint[], timezone: string): HourlyPoint[] {
-  let nowHour: string | null = null;
-  try {
-    nowHour = new Date().toLocaleString('sv-SE', { timeZone: timezone }).replace(' ', 'T').slice(0, 13);
-  } catch {
-    nowHour = null;
-  }
-  if (nowHour) {
-    const future = hours.filter((h) => h.time.slice(0, 13) >= (nowHour as string));
-    if (future.length > 0) return future.slice(0, WINDOW_HOURS);
-  }
-  return hours.slice(0, WINDOW_HOURS);
+  if (level === 'SAFE') return <CheckCircle2 className="w-7 h-7 text-white shrink-0" />;
+  if (level === 'CAUTION') return <AlertTriangle className="w-7 h-7 text-slate-950 shrink-0" />;
+  if (level === 'DANGER') return <ShieldAlert className="w-7 h-7 text-white shrink-0" />;
+  return <OctagonAlert className="w-7 h-7 text-white shrink-0" />;
 }
 
 export default function App() {
   const [selectedSite, setSelectedSite] = useState<LandingSite>(LANDING_SITES[0]);
+  const [timeWindow, setTimeWindow] = useState<number>(12);
   const [useDemoMode, setUseDemoMode] = useState<boolean>(true);
   const [demoScenarioId, setDemoScenarioId] = useState<string>('calm-morning');
   const [liveMetrics, setLiveMetrics] = useState<WeatherMetrics | null>(null);
-  const [liveNotes, setLiveNotes] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
-
-  const [currentView, setCurrentView] = useState<'home' | 'map'>('home');
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+  const [currentTab, setCurrentTab] = useState<'home' | 'forecast' | 'map' | 'alerts' | 'settings'>('home');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (useDemoMode) return;
     let cancelled = false;
+
     async function loadLiveData() {
       setIsLoading(true);
       setApiError(null);
       setLiveMetrics(null);
-      setLiveNotes([]);
       try {
-        const notes: string[] = [];
         const weather = await weatherClient.getForecast({
           latitude: selectedSite.lat,
           longitude: selectedSite.lon,
         });
+
         if (cancelled) return;
         if (weather.status === 'unavailable') {
           setApiError(friendlyMessage(weather.reason));
           return;
         }
-        if (weather.status === 'stale') {
-          notes.push(`Showing a saved forecast from ${new Date(weather.fetchedAt).toLocaleTimeString()}. ${friendlyMessage(weather.reason)}`);
-        }
-        const hours = upcomingHours(weather.data.hours, weather.data.timezone);
+
+        const hours = weather.data.hours.slice(0, timeWindow);
         const summary = summarizeHours(hours);
 
         let waveHeightMeters: number;
@@ -99,37 +85,33 @@ export default function App() {
           if (cancelled) return;
           if (marine.status === 'unavailable') {
             waveHeightMeters = 0.5;
-            notes.push(`Wave data unavailable (${marine.message}). A 0.5 m baseline was assumed.`);
           } else {
-            waveHeightMeters = getWorstWaveHeight(marine.data, WINDOW_HOURS);
-            if (marine.status === 'stale') {
-              notes.push('Wave data is from a saved copy because the marine service could not be reached.');
-            }
+            waveHeightMeters = getWorstWaveHeight(marine.data, timeWindow);
           }
         } else {
           const windKnots = (summary.maxWindGustKmh ?? 0) / KMH_PER_KNOT;
           waveHeightMeters = Math.round(windKnots * LAKE_WAVE_PER_KNOT * 10) / 10;
-          notes.push('Wave height is an estimate from wind speed (no lake wave data available).');
         }
 
         const bridged = toWeatherMetrics(summary, waveHeightMeters);
         if (!bridged) {
-          setApiError('The forecast has no wind data, so risk cannot be assessed.');
+          setApiError('No wind data available for risk assessment.');
           return;
         }
+
         setLiveMetrics(bridged.metrics);
-        setLiveNotes([...notes, ...bridged.assumptions]);
       } catch {
-        if (!cancelled) setApiError('Something went wrong while loading live data. Try again.');
+        if (!cancelled) setApiError('Failed to load live forecast data.');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
     }
+
     loadLiveData();
     return () => {
       cancelled = true;
     };
-  }, [selectedSite, useDemoMode]);
+  }, [selectedSite, timeWindow, useDemoMode]);
 
   const metrics: WeatherMetrics | null = useMemo(() => {
     if (useDemoMode) {
@@ -143,272 +125,322 @@ export default function App() {
   const style = assessment ? RISK_STYLES[assessment.level] : null;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex">
-      {/* LEFT SIDEBAR NAVIGATION */}
-      <aside
-        className={`${
-          isSidebarOpen ? 'w-64' : 'w-20'
-        } bg-slate-900 border-r border-slate-800 flex flex-col transition-all duration-300 sticky top-0 h-screen z-50`}
-      >
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center space-x-3 overflow-hidden">
-            <div className="bg-cyan-500/10 p-2 rounded-lg border border-cyan-500/20 shrink-0">
-              <Anchor className="w-5 h-5 text-cyan-400" />
+    <div className="min-h-screen bg-slate-900 flex flex-col relative overflow-x-hidden font-sans">
+      
+      {/* VIBRANT FULL-SCREEN SCENIC BACKGROUND (Just like FishCast concept image) */}
+      <div 
+        className="fixed inset-0 bg-cover bg-top bg-no-repeat pointer-events-none z-0"
+        style={{ backgroundImage: `url('/fisherman-bg.jpg')` }}
+      />
+
+      {/* TOP GRADIENT OVERLAY FOR STATUS BAR READABILITY */}
+      <div className="fixed top-0 inset-x-0 h-32 bg-gradient-to-b from-slate-950/70 via-slate-900/30 to-transparent pointer-events-none z-0" />
+
+      {/* MOBILE APP CONTAINER */}
+      <div className="w-full sm:max-w-md sm:mx-auto min-h-screen flex flex-col relative sm:shadow-2xl z-10 pb-20">
+        
+        {/* MOBILE TOP HEADER (TRANSPARENT / GLASS WITH SHADOW) */}
+        <header className="px-4 pt-4 pb-2 flex items-center justify-between text-white drop-shadow-md sticky top-0 z-50 bg-slate-950/30 backdrop-blur-sm">
+          <div className="flex items-center space-x-2.5">
+            <div className="bg-white/20 backdrop-blur-md p-2 rounded-2xl border border-white/30 text-white shadow">
+              <Anchor className="w-5 h-5" />
             </div>
-            {isSidebarOpen && (
-              <div className="whitespace-nowrap">
-                <h1 className="text-base font-bold text-white">BahariSafe</h1>
-                <p className="text-[10px] text-slate-400">Risk Engine</p>
+            <div>
+              <h1 className="text-lg font-extrabold text-white leading-none tracking-tight">BahariSafe</h1>
+              <p className="text-[10px] text-sky-100 font-medium mt-0.5">Marine Weather for Fishermen</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button onClick={() => setCurrentTab('alerts')} className="p-2 bg-white/20 backdrop-blur-md hover:bg-white/30 rounded-2xl relative text-white border border-white/30 shadow transition">
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-slate-900"></span>
+            </button>
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/20 backdrop-blur-md hover:bg-white/30 rounded-2xl text-white border border-white/30 shadow transition">
+              {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+          </div>
+        </header>
+
+        {/* SLIDEOUT MENU OVERLAY */}
+        {isMobileMenuOpen && (
+          <div className="mx-4 mt-2 bg-white/95 backdrop-blur-xl border border-white/40 rounded-3xl p-4 z-50 shadow-2xl space-y-3 text-slate-900">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">App Mode</div>
+            <button
+              onClick={() => { setUseDemoMode(!useDemoMode); setIsMobileMenuOpen(false); }}
+              className={`w-full flex items-center justify-between p-3 rounded-2xl text-xs font-semibold transition ${
+                useDemoMode ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              }`}
+            >
+              <span className="flex items-center space-x-2">
+                {useDemoMode ? <WifiOff className="w-4 h-4" /> : <Wifi className="w-4 h-4" />}
+                <span>{useDemoMode ? 'Offline Demo Mode' : 'Live API Mode'}</span>
+              </span>
+              <span className="text-[10px] underline">Toggle</span>
+            </button>
+          </div>
+        )}
+
+        {/* MAIN SCROLLABLE CONTENT */}
+        <main className="flex-1 p-4 space-y-3.5 overflow-y-auto pb-24">
+
+          {/* SECTION: LANDING SITE SELECTOR (FLOATING WHITE GLASS PILL) */}
+          <div className="bg-white/85 backdrop-blur-md border border-white/60 rounded-3xl p-3.5 shadow-xl space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center space-x-1.5">
+                <Compass className="w-3.5 h-3.5 text-sky-600" />
+                <span>Landing Site</span>
+              </label>
+              <span className="text-[10px] px-2 py-0.5 bg-sky-100 text-sky-700 rounded-full font-bold">Live Calc</span>
+            </div>
+
+            <select
+              value={selectedSite.id}
+              onChange={(e) => {
+                const site = LANDING_SITES.find((s) => s.id === e.target.value);
+                if (site) setSelectedSite(site);
+              }}
+              className="w-full bg-slate-100/90 border border-slate-200 rounded-2xl px-3.5 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 transition shadow-inner"
+            >
+              <optgroup label="🌊 Coast Region (Ocean)">
+                {LANDING_SITES.filter(s => s.region.includes('Coast')).map(s => <option key={s.id} value={s.id}>{s.name} 🌊</option>)}
+              </optgroup>
+              <optgroup label="🏞️ Lake Victoria Region">
+                {LANDING_SITES.filter(s => s.region.includes('Lake Victoria')).map(s => <option key={s.id} value={s.id}>{s.name} 🏞️</option>)}
+              </optgroup>
+              <optgroup label="🏞️ Turkana & Rift Valley">
+                {LANDING_SITES.filter(s => s.region.includes('Rift Valley') || s.region.includes('Turkana')).map(s => <option key={s.id} value={s.id}>{s.name} 🏞️</option>)}
+              </optgroup>
+            </select>
+
+            {/* Time Window Picker */}
+            <div className="pt-0.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1 mb-1.5">
+                <Calendar className="w-3 h-3 text-sky-600" />
+                <span>Trip Time Horizon</span>
+              </label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: 'Morning', hours: 6 },
+                  { label: 'Afternoon', hours: 12 },
+                  { label: 'Evening', hours: 18 },
+                  { label: '24 Hours', hours: 24 },
+                ].map((w) => (
+                  <button
+                    key={w.hours}
+                    onClick={() => setTimeWindow(w.hours)}
+                    className={`py-1.5 px-1 rounded-xl text-[10px] font-bold transition shadow-sm border ${
+                      timeWindow === w.hours
+                        ? 'bg-sky-600 text-white border-sky-500 shadow-md scale-[1.02]'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {useDemoMode && (
+              <div className="pt-2 border-t border-slate-200/80">
+                <label className="text-[10px] text-slate-500 font-medium block mb-1">Demo Scenarios:</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {DEMO_SCENARIOS.map((scen) => (
+                    <button
+                      key={scen.id}
+                      onClick={() => setDemoScenarioId(scen.id)}
+                      className={`p-1.5 rounded-xl border text-left transition ${
+                        demoScenarioId === scen.id ? 'bg-sky-50 border-sky-400 text-sky-800 font-bold' : 'bg-white border-slate-200 text-slate-500 text-[9px]'
+                      }`}
+                    >
+                      <div className="truncate">{scen.title}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition"
-          >
-            {isSidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          </button>
-        </div>
 
-        {/* Sidebar Menu Options */}
-        <nav className="flex-1 p-3 space-y-2">
-          <button
-            onClick={() => setCurrentView('home')}
-            className={`w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-xs font-medium transition ${
-              currentView === 'home'
-                ? 'bg-cyan-500 text-slate-950 font-semibold shadow-lg'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-            }`}
-          >
-            <HomeIcon className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span>Home / Assessment</span>}
-          </button>
-
-          <button
-            onClick={() => setCurrentView('map')}
-            className={`w-full flex items-center justify-between px-3 py-3 rounded-xl text-xs font-medium transition ${
-              currentView === 'map'
-                ? 'bg-cyan-500 text-slate-950 font-semibold shadow-lg'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-            }`}
-          >
-            <div className="flex items-center space-x-3">
-              <MapIcon className="w-5 h-5 shrink-0" />
-              {isSidebarOpen && <span>Fishing Map</span>}
-            </div>
-            {isSidebarOpen && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>}
-          </button>
-        </nav>
-
-        {/* Sidebar Footer Mode Toggle */}
-        <div className="p-3 border-t border-slate-800">
-          <button
-            onClick={() => setUseDemoMode(!useDemoMode)}
-            className={`w-full flex items-center space-x-2 p-2.5 rounded-xl text-xs font-medium transition ${
-              useDemoMode
-                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-            }`}
-          >
-            {useDemoMode ? <WifiOff className="w-4 h-4 shrink-0" /> : <Wifi className="w-4 h-4 shrink-0" />}
-            {isSidebarOpen && (
-              <span className="truncate">{useDemoMode ? 'Offline Demo' : 'Live API'}</span>
-            )}
-          </button>
-        </div>
-      </aside>
-
-      {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <main className="p-6 max-w-7xl w-full mx-auto">
-          {currentView === 'home' ? (
-            /* === RISK ASSESSMENT VIEW === */
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 space-y-6">
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-                  <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">1. Select Landing Site</h2>
-                    <select
-  value={selectedSite.id}
-  onChange={(e) => {
-    const site = LANDING_SITES.find((s) => s.id === e.target.value);
-    if (site) setSelectedSite(site);
-  }}
-  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500 transition"
->
-  <optgroup label="🌊 Coast Region (Ocean)">
-    {LANDING_SITES.filter(s => s.region.includes('Coast')).map((site) => (
-      <option key={site.id} value={site.id}>
-        {site.name} 🌊
-      </option>
-    ))}
-  </optgroup>
-
-  <optgroup label="🏞️ Lake Victoria Region">
-    {LANDING_SITES.filter(s => s.region.includes('Lake Victoria')).map((site) => (
-      <option key={site.id} value={site.id}>
-        {site.name} 🏞️
-      </option>
-    ))}
-  </optgroup>
-
-  <optgroup label="🏞️ Rift Valley Region">
-    {LANDING_SITES.filter(s => s.region.includes('Rift Valley')).map((site) => (
-      <option key={site.id} value={site.id}>
-        {site.name} 🏞️
-      </option>
-    ))}
-  </optgroup>
-
-  <optgroup label="🏞️ Inland Dams & Rivers">
-    {LANDING_SITES.filter(s => s.region.includes('Inland Dams')).map((site) => (
-      <option key={site.id} value={site.id}>
-        {site.name} 🏞️
-      </option>
-    ))}
-  </optgroup>
-</select>
+          {/* VIEW: HOME / ASSESSMENT */}
+          {currentTab === 'home' && (
+            <div className="space-y-3.5">
+              
+              {/* CURRENT CONDITIONS CARD (WHITE FLOATING GLASS GRID - JUST LIKE FISHCAST) */}
+              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                    <Sun className="w-4 h-4 text-amber-500" />
+                    <span>Current Conditions</span>
+                  </span>
+                  {isLoading ? <Loader2 className="w-4 h-4 text-sky-600 animate-spin" /> : <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Good</span>}
                 </div>
 
-                {useDemoMode && (
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-                    <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">2. Demo Scenarios</h2>
-                    <div className="space-y-2">
-                      {DEMO_SCENARIOS.map((scen) => (
-                        <button
-                          key={scen.id}
-                          onClick={() => setDemoScenarioId(scen.id)}
-                          className={`w-full text-left p-3 rounded-xl border transition ${
-                            demoScenarioId === scen.id
-                              ? 'bg-cyan-500/10 border-cyan-500/40 text-white'
-                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="font-medium text-sm">{scen.title}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">{scen.description}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {apiError && <p className="text-xs text-rose-500 font-semibold">{apiError}</p>}
 
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
-                      {useDemoMode ? 'Scenario Metrics' : `Live Data (next ${WINDOW_HOURS} h, worst case)`}
-                    </h2>
-                    {isLoading && <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />}
-                  </div>
-                  {apiError && <p className="text-xs text-rose-400">{apiError}</p>}
-                  {metrics ? (
-                    <div className="space-y-2">
-                      <div className="flex justify-between bg-slate-950 px-3 py-2 rounded-lg text-xs">
-                        <span className="text-slate-400">Wind Speed</span>
-                        <span className="font-mono text-cyan-400">{metrics.windSpeedKnots.toFixed(1)} knots</span>
+                {metrics ? (
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="bg-slate-50/90 p-2.5 rounded-2xl border border-slate-200/80 flex items-center space-x-2.5 shadow-sm">
+                      <div className="p-2 bg-sky-100 rounded-xl text-sky-600">
+                        <Wind className="w-4 h-4" />
                       </div>
-                      <div className="flex justify-between bg-slate-950 px-3 py-2 rounded-lg text-xs">
-                        <span className="text-slate-400">Wave Height</span>
-                        <span className="font-mono text-cyan-400">{metrics.waveHeightMeters.toFixed(1)} m</span>
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Wind</div>
+                        <div className="text-sm font-extrabold text-slate-900">{metrics.windSpeedKnots.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">kts</span></div>
                       </div>
-                      <div className="flex justify-between bg-slate-950 px-3 py-2 rounded-lg text-xs">
-                        <span className="text-slate-400">Visibility</span>
-                        <span className="font-mono text-cyan-400">{metrics.visibilityKm.toFixed(1)} km</span>
+                    </div>
+
+                    <div className="bg-slate-50/90 p-2.5 rounded-2xl border border-slate-200/80 flex items-center space-x-2.5 shadow-sm">
+                      <div className="p-2 bg-sky-100 rounded-xl text-sky-600">
+                        <Waves className="w-4 h-4" />
                       </div>
-                      <div className="flex justify-between bg-slate-950 px-3 py-2 rounded-lg text-xs">
-                        <span className="text-slate-400">Squall Warning</span>
-                        <span className={`font-mono ${metrics.isSquallWarning ? 'text-rose-400' : 'text-cyan-400'}`}>
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Waves</div>
+                        <div className="text-sm font-extrabold text-slate-900">{metrics.waveHeightMeters.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">m</span></div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50/90 p-2.5 rounded-2xl border border-slate-200/80 flex items-center space-x-2.5 shadow-sm">
+                      <div className="p-2 bg-sky-100 rounded-xl text-sky-600">
+                        <Eye className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Visibility</div>
+                        <div className="text-sm font-extrabold text-slate-900">{metrics.visibilityKm.toFixed(1)} <span className="text-[10px] font-normal text-slate-500">km</span></div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50/90 p-2.5 rounded-2xl border border-slate-200/80 flex items-center space-x-2.5 shadow-sm">
+                      <div className="p-2 bg-sky-100 rounded-xl text-sky-600">
+                        <Thermometer className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Squall</div>
+                        <div className={`text-xs font-extrabold ${metrics.isSquallWarning ? 'text-rose-600' : 'text-emerald-600'}`}>
                           {metrics.isSquallWarning ? 'ACTIVE' : 'None'}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    !isLoading && !apiError && <p className="text-xs text-slate-500 italic">No data to show yet.</p>
-                  )}
-                  {!useDemoMode && liveNotes.length > 0 && (
-                    <ul className="space-y-1.5">
-                      {liveNotes.map((note, idx) => (
-                        <li key={idx} className="text-xs text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
-                          {note}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-
-              <div className="lg:col-span-2 space-y-6">
-                {assessment && style ? (
-                  <>
-                    <div className={`rounded-2xl p-6 border shadow-2xl ${style.card}`}>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center space-x-3">
-                          <RiskIcon level={assessment.level} />
-                          <div>
-                            <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Safety Status</div>
-                            <div className="text-3xl font-extrabold tracking-tight mt-0.5">{assessment.level}</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Risk Score</div>
-                          <div className="text-3xl font-extrabold tracking-tight mt-0.5">
-                            {assessment.score}<span className="text-base font-medium opacity-70">/100</span>
-                          </div>
                         </div>
                       </div>
-                      <div className="mt-4 h-2 w-full rounded-full bg-slate-950/60 overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${style.bar}`} style={{ width: `${assessment.score}%` }} />
-                      </div>
-                      <p className="text-lg font-medium mt-4">{assessment.canGoFishing ? 'OK to go fishing' : 'Do NOT go fishing'}</p>
-                      <p className="text-sm opacity-90 mt-1">{style.label}</p>
                     </div>
-
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                      <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center space-x-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-400" />
-                        <span>Warnings</span>
-                      </h3>
-                      {assessment.warnings.length === 0 ? (
-                        <p className="text-sm text-slate-400 italic">No hazard warnings active.</p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {assessment.warnings.map((warning, idx) => (
-                            <li key={idx} className="text-sm bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-rose-300">
-                              • {warning}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl text-sm text-slate-400">
-                    {isLoading
-                      ? 'Loading live forecast…'
-                      : useDemoMode
-                      ? 'Pick a demo scenario to see an assessment.'
-                      : 'No assessment available.'}
                   </div>
+                ) : (
+                  !isLoading && <p className="text-xs text-slate-400 italic">Select a site to view conditions.</p>
                 )}
               </div>
-            </div>
-          ) : (
-            /* === MAP VIEW === */
-            <div className="space-y-4">
-              <div className="flex items-center justify-between bg-slate-900 border border-slate-800 px-5 py-3 rounded-2xl">
-                <div>
-                  <h2 className="text-base font-semibold text-white">Interactive Fishing Grounds Map</h2>
-                  <p className="text-xs text-slate-400">Monitored fishing grounds are marked in green. Use "Find My Location" to locate yourself.</p>
-                </div>
-                <span className="text-xs px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-medium flex items-center space-x-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  <span>Green = Fishing Grounds</span>
-                </span>
-              </div>
 
-              <MapView sites={LANDING_SITES} />
+              {/* SAFETY STATUS CARD (GREEN / AMBER / RED PROMINENT BANNER LIKE FISHCAST) */}
+              {assessment && style ? (
+                <div className={`rounded-3xl p-4 border ${style.card} space-y-2.5 transition-all transform`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2.5">
+                      <RiskIcon level={assessment.level} />
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider opacity-90">Safety Status</div>
+                        <div className="text-xl font-black tracking-tight leading-none">{assessment.level}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-bold uppercase tracking-wider opacity-90">Risk Score</div>
+                      <div className="text-xl font-black tracking-tight">{assessment.score}<span className="text-xs font-medium opacity-80">/100</span></div>
+                    </div>
+                  </div>
+
+                  <div className="h-2 w-full rounded-full bg-black/20 overflow-hidden">
+                    <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${assessment.score}%` }} />
+                  </div>
+
+                  <p className="text-sm font-black">{assessment.canGoFishing ? 'Safe to Go Fishing' : 'Do NOT Go Fishing'}</p>
+                  <p className="text-xs opacity-95 font-medium">{style.label}</p>
+                </div>
+              ) : null}
+
+              {/* WARNINGS CARD */}
+              {assessment && assessment.warnings.length > 0 && (
+                <div className="bg-rose-500/90 text-white backdrop-blur-md border border-rose-400 rounded-3xl p-4 shadow-xl space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider flex items-center space-x-2">
+                    <AlertTriangle className="w-4 h-4 text-white" />
+                    <span>Active Hazard Warnings</span>
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {assessment.warnings.map((w, idx) => (
+                      <li key={idx} className="text-xs bg-black/20 p-2 rounded-2xl font-medium">
+                        • {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
             </div>
           )}
+
+          {/* VIEW: MAP */}
+          {currentTab === 'map' && (
+            <div className="space-y-3">
+              <div className="bg-white/90 backdrop-blur-md border border-white/80 p-3 rounded-3xl flex items-center justify-between shadow-lg">
+                <div>
+                  <h2 className="text-xs font-bold text-slate-900">Fishing Grounds Map</h2>
+                  <p className="text-[10px] text-slate-500">Green = Monitored Landing Sites</p>
+                </div>
+                <span className="text-[10px] px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full font-bold">
+                  Active
+                </span>
+              </div>
+              <div className="h-[60vh] w-full rounded-3xl overflow-hidden border border-white/80 shadow-2xl">
+                <MapView sites={LANDING_SITES} />
+              </div>
+            </div>
+          )}
+
+          {currentTab === 'forecast' && (
+            <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-6 text-center space-y-2 shadow-xl">
+              <Calendar className="w-8 h-8 text-sky-600 mx-auto" />
+              <h2 className="text-sm font-bold text-slate-900">Detailed Hourly Forecast</h2>
+              <p className="text-xs text-slate-500">View wind gusts, wave swells, and precipitation timelines for your chosen window.</p>
+            </div>
+          )}
+
+          {currentTab === 'alerts' && (
+            <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-6 text-center space-y-2 shadow-xl">
+              <Bell className="w-8 h-8 text-rose-500 mx-auto" />
+              <h2 className="text-sm font-bold text-slate-900">Storm & Squall Alerts</h2>
+              <p className="text-xs text-slate-500">All regional alerts for Lake Victoria, Turkana, and the Coast are up to date.</p>
+            </div>
+          )}
+
+          {currentTab === 'settings' && (
+            <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-6 text-center space-y-2 shadow-xl">
+              <Settings className="w-8 h-8 text-sky-600 mx-auto" />
+              <h2 className="text-sm font-bold text-slate-900">App Preferences</h2>
+              <p className="text-xs text-slate-500">Language (English / Swahili), units (Knots / Meters), and offline caching settings.</p>
+            </div>
+          )}
+
         </main>
+
+        {/* NATIVE BOTTOM NAVIGATION BAR (WHITE GLASS FLOATING BAR) */}
+        <nav className="fixed bottom-0 inset-x-0 sm:max-w-md sm:mx-auto bg-white/90 backdrop-blur-xl border-t border-slate-200/80 px-4 py-2 flex items-center justify-around z-50 shadow-2xl">
+          {[
+            { id: 'home', label: 'Home', icon: HomeIcon },
+            { id: 'forecast', label: 'Forecast', icon: Calendar },
+            { id: 'map', label: 'Map', icon: MapIcon },
+            { id: 'alerts', label: 'Alerts', icon: Bell },
+            { id: 'settings', label: 'Settings', icon: Settings },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = currentTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setCurrentTab(tab.id as any)}
+                className={`flex flex-col items-center py-1 px-3 rounded-2xl transition ${
+                  isActive ? 'text-sky-600 font-extrabold scale-105' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Icon className="w-5 h-5 mb-0.5" />
+                <span className="text-[10px]">{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
       </div>
     </div>
   );
