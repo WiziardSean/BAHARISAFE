@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { LANDING_SITES, type LandingSite } from './data/sites';
 import { DEMO_SCENARIOS } from './data/demoScenarios';
 import { evaluateRisk, type RiskLevel, type WeatherMetrics } from './lib/riskEngine';
 import { weatherClient, summarizeHours, toWeatherMetrics, friendlyMessage } from './lib/weather';
 import { marineClient } from './lib/marine/marineClient';
 import { getWorstWaveHeight } from './lib/marine/marineBridge';
-import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, WifiOff, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Compass, Thermometer, Wind, Waves, Eye, Menu, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, TrendingUp, AlertCircle } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, WifiOff, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Compass, Thermometer, Wind, Waves, Eye, Menu, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, AlertCircle, Phone, LifeBuoy } from 'lucide-react';
 import { MapView } from './components/MapView';
 
 const KMH_PER_KNOT = 1.852;
@@ -121,7 +121,62 @@ export default function App() {
   const [smsAlerts, setSmsAlerts] = useState<boolean>(true);
   const [vesselType, setVesselType] = useState<string>('canoe');
 
+  // SOS Modal & Free-Floating Draggable Position State
+  const [showSosModal, setShowSosModal] = useState<boolean>(false);
+  const [sosPosition, setSosPosition] = useState<{ x: number; y: number }>({ x: window.innerWidth - 80, y: window.innerHeight - 200 });
+  const draggingRef = useRef<boolean>(false);
+  const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hasMoved = useRef<boolean>(false);
+
   const t = TRANSLATIONS[lang];
+
+  // Universal Drag Handlers for Mouse & Touch
+  const onPointerDown = (clientX: number, clientY: number) => {
+    draggingRef.current = true;
+    hasMoved.current = false;
+    dragStartPos.current = {
+      x: clientX - sosPosition.x,
+      y: clientY - sosPosition.y,
+    };
+  };
+
+  const onPointerMove = (clientX: number, clientY: number) => {
+    if (!draggingRef.current) return;
+    hasMoved.current = true;
+    
+    const newX = clientX - dragStartPos.current.x;
+    const newY = clientY - dragStartPos.current.y;
+
+    // Keep button strictly within screen bounds
+    const boundedX = Math.max(10, Math.min(window.innerWidth - 70, newX));
+    const boundedY = Math.max(70, Math.min(window.innerHeight - 130, newY));
+
+    setSosPosition({ x: boundedX, y: boundedY });
+  };
+
+  const onPointerUp = () => {
+    draggingRef.current = false;
+  };
+
+  useEffect(() => {
+    const handleWindowMouseMove = (e: MouseEvent) => onPointerMove(e.clientX, e.clientY);
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const handleWindowUp = () => onPointerUp();
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowUp);
+    window.addEventListener('touchmove', handleWindowTouchMove);
+    window.addEventListener('touchend', handleWindowUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowUp);
+      window.removeEventListener('touchmove', handleWindowTouchMove);
+      window.removeEventListener('touchend', handleWindowUp);
+    };
+  }, [sosPosition]);
 
   useEffect(() => {
     if (useDemoMode) return;
@@ -203,7 +258,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col relative overflow-x-hidden font-sans">
+    <div className="min-h-screen bg-slate-900 flex flex-col relative overflow-hidden font-sans select-none">
       
       {/* BACKGROUND IMAGE */}
       <div 
@@ -212,6 +267,84 @@ export default function App() {
       />
 
       <div className="fixed top-0 inset-x-0 h-32 bg-gradient-to-b from-slate-950/70 via-slate-900/30 to-transparent pointer-events-none z-0" />
+
+      {/* FREELY POSITIONABLE FLOATING SOS BUTTON */}
+      <div
+        style={{ left: `${sosPosition.x}px`, top: `${sosPosition.y}px` }}
+        className="fixed z-[150] cursor-grab active:cursor-grabbing touch-none select-none"
+        onMouseDown={(e) => onPointerDown(e.clientX, e.clientY)}
+        onTouchStart={(e) => {
+          if (e.touches.length > 0) onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
+        }}
+        onClick={() => {
+          if (!hasMoved.current) setShowSosModal(true);
+        }}
+      >
+        <div className="bg-rose-600 hover:bg-rose-700 text-white w-14 h-14 rounded-full shadow-2xl flex flex-col items-center justify-center border-4 border-white animate-bounce transition transform hover:scale-110">
+          <LifeBuoy className="w-6 h-6 animate-pulse" />
+          <span className="text-[10px] font-black tracking-tighter leading-none mt-0.5">SOS</span>
+        </div>
+      </div>
+
+      {/* SOS EMERGENCY CHOICE MODAL */}
+      {showSosModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-4 text-slate-900 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2 text-rose-600 font-extrabold text-sm uppercase">
+                <ShieldAlert className="w-5 h-5" />
+                <span>Maritime Emergency SOS</span>
+              </div>
+              <button onClick={() => setShowSosModal(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Select an emergency authority to call immediately for rescue or assistance on Lake Victoria, Turkana, or the Coast:
+            </p>
+
+            <div className="space-y-2.5">
+              <a
+                href="tel:112"
+                className="flex items-center justify-between p-3.5 bg-rose-600 text-white rounded-2xl shadow-md font-extrabold text-xs hover:bg-rose-700 transition"
+                onClick={() => setShowSosModal(false)}
+              >
+                <div className="flex items-center space-x-3">
+                  <Phone className="w-5 h-5" />
+                  <div>
+                    <div className="text-sm">Kenya Coast Guard</div>
+                    <div className="text-[10px] opacity-90">National Emergency: 112</div>
+                  </div>
+                </div>
+                <span className="bg-white/20 px-2.5 py-1 rounded-xl text-xs">CALL NOW</span>
+              </a>
+
+              <a
+                href="tel:0800720021"
+                className="flex items-center justify-between p-3.5 bg-sky-600 text-white rounded-2xl shadow-md font-extrabold text-xs hover:bg-sky-700 transition"
+                onClick={() => setShowSosModal(false)}
+              >
+                <div className="flex items-center space-x-3">
+                  <Phone className="w-5 h-5" />
+                  <div>
+                    <div className="text-sm">Kenya Maritime Authority</div>
+                    <div className="text-[10px] opacity-90">Toll-Free: 0800 720 021</div>
+                  </div>
+                </div>
+                <span className="bg-white/20 px-2.5 py-1 rounded-xl text-xs">CALL NOW</span>
+              </a>
+            </div>
+
+            <button
+              onClick={() => setShowSosModal(false)}
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 rounded-2xl text-xs font-bold text-slate-600 transition"
+            >
+              Cancel / Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="w-full sm:max-w-md sm:mx-auto min-h-screen flex flex-col relative sm:shadow-2xl z-10 pb-20">
         
@@ -269,7 +402,7 @@ export default function App() {
         {/* MAIN SCROLLABLE CONTENT */}
         <main className="flex-1 p-4 space-y-3.5 overflow-y-auto pb-24">
 
-          {/* HOME VIEW: SITE & CONDITIONS */}
+          {/* HOME VIEW */}
           {currentTab === 'home' && (
             <div className="space-y-3.5">
               <div className="bg-white/85 backdrop-blur-md border border-white/60 rounded-3xl p-3.5 shadow-xl space-y-2.5">
@@ -468,11 +601,9 @@ export default function App() {
             </div>
           )}
 
-          {/* VIEW: FORECAST TAB (DETAILED HOURLY TIMELINE & SAFE WINDOWS) */}
+          {/* VIEW: FORECAST TAB */}
           {currentTab === 'forecast' && (
             <div className="space-y-3.5">
-              
-              {/* HEADER */}
               <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl flex items-center space-x-3">
                 <div className="p-3 bg-sky-100 rounded-2xl text-sky-600">
                   <Calendar className="w-6 h-6" />
@@ -483,7 +614,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* BEST FISHING WINDOW CARD */}
               <div className="bg-emerald-500 text-white rounded-3xl p-4 shadow-xl space-y-2 border border-emerald-400">
                 <div className="flex items-center space-x-2 font-bold text-xs uppercase tracking-wider">
                   <CheckCircle2 className="w-4 h-4 text-white" />
@@ -491,11 +621,10 @@ export default function App() {
                 </div>
                 <div className="text-lg font-black">05:00 AM – 10:00 AM</div>
                 <p className="text-xs opacity-95 font-medium">
-                  {lang === 'EN' ? 'Calm morning waters with low wind gusts (&lt; 8 kts). Ideal for small craft fishing.' : 'Maji tulivu ya asubuhi na upepo mdogo. Inafaa kwa vyombo vidogo.'}
+                  {lang === 'EN' ? 'Calm morning waters with low wind gusts (< 8 kts). Ideal for small craft fishing.' : 'Maji tulivu ya asubuhi na upepo mdogo. Inafaa kwa vyombo vidogo.'}
                 </p>
               </div>
 
-              {/* HOURLY TIMELINE LIST */}
               <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
@@ -527,7 +656,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* WARNING ADVISORY */}
               <div className="bg-amber-500/90 text-slate-950 rounded-3xl p-4 shadow-xl space-y-1.5 border border-amber-400">
                 <div className="flex items-center space-x-2 font-bold text-xs uppercase tracking-wider">
                   <AlertCircle className="w-4 h-4" />
@@ -537,7 +665,6 @@ export default function App() {
                   {lang === 'EN' ? 'Expect wind speeds to pick up significantly past 2:00 PM across Lake Victoria and coastal channels. Ensure return by noon.' : 'Tarajia upepo kuongezeka baada ya saa 8:00 mchana. Hakikisha umerudi kabla ya adhuhuri.'}
                 </p>
               </div>
-
             </div>
           )}
 
