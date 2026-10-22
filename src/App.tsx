@@ -5,7 +5,7 @@ import { evaluateRisk, type RiskLevel, type WeatherMetrics } from './lib/riskEng
 import { weatherClient, summarizeHours, toWeatherMetrics, friendlyMessage } from './lib/weather';
 import { marineClient } from './lib/marine/marineClient';
 import { getWorstWaveHeight } from './lib/marine/marineBridge';
-import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, WifiOff, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Compass, Thermometer, Wind, Waves, Eye, Menu, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, AlertCircle, Phone, LifeBuoy } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Compass, Thermometer, Wind, Waves, Eye, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, AlertCircle, Phone, LifeBuoy, ArrowRight, Play, ArrowLeft } from 'lucide-react';
 import { MapView } from './components/MapView';
 
 const KMH_PER_KNOT = 1.852;
@@ -105,13 +105,15 @@ function RiskIcon({ level }: { level: RiskLevel }) {
 export default function App() {
   const [selectedSite, setSelectedSite] = useState<LandingSite>(LANDING_SITES[0]);
   const [timeWindow, setTimeWindow] = useState<number>(12);
-  const [useDemoMode, setUseDemoMode] = useState<boolean>(true);
+  
+  // null = Show Live/Demo Gateway Screen first
+  const [useDemoMode, setUseDemoMode] = useState<boolean | null>(null);
+
   const [demoScenarioId, setDemoScenarioId] = useState<string>('calm-morning');
   const [liveMetrics, setLiveMetrics] = useState<WeatherMetrics | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<'home' | 'forecast' | 'map' | 'alerts' | 'settings'>('home');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Settings State
   const [lang, setLang] = useState<'EN' | 'SWA'>('EN');
@@ -121,7 +123,7 @@ export default function App() {
   const [smsAlerts, setSmsAlerts] = useState<boolean>(true);
   const [vesselType, setVesselType] = useState<string>('canoe');
 
-  // SOS Modal & Free-Floating Draggable Position State
+  // SOS Modal & Draggable Button State
   const [showSosModal, setShowSosModal] = useState<boolean>(false);
   const [sosPosition, setSosPosition] = useState<{ x: number; y: number }>({ x: window.innerWidth - 80, y: window.innerHeight - 200 });
   const draggingRef = useRef<boolean>(false);
@@ -130,7 +132,6 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
 
-  // Universal Drag Handlers for Mouse & Touch
   const onPointerDown = (clientX: number, clientY: number) => {
     draggingRef.current = true;
     hasMoved.current = false;
@@ -147,7 +148,6 @@ export default function App() {
     const newX = clientX - dragStartPos.current.x;
     const newY = clientY - dragStartPos.current.y;
 
-    // Keep button strictly within screen bounds
     const boundedX = Math.max(10, Math.min(window.innerWidth - 70, newX));
     const boundedY = Math.max(70, Math.min(window.innerHeight - 130, newY));
 
@@ -179,7 +179,7 @@ export default function App() {
   }, [sosPosition]);
 
   useEffect(() => {
-    if (useDemoMode) return;
+    if (useDemoMode || useDemoMode === null) return;
     let cancelled = false;
 
     async function loadLiveData() {
@@ -257,10 +257,64 @@ export default function App() {
     return `${meters.toFixed(1)} m`;
   };
 
+  // ==========================================
+  // INITIAL GATEWAY SCREEN (LIVE OR DEMO SELECTOR)
+  // ==========================================
+  if (useDemoMode === null) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center relative px-4 font-sans select-none">
+        <div 
+          className="fixed inset-0 bg-cover bg-top bg-no-repeat pointer-events-none z-0"
+          style={{ backgroundImage: `url('/fisherman-bg.jpg')` }}
+        />
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-0" />
+
+        <div className="w-full max-w-sm bg-white/95 backdrop-blur-xl border border-white/50 rounded-3xl p-6 shadow-2xl z-10 text-center space-y-6">
+          <div className="bg-sky-600 text-white w-16 h-16 rounded-3xl mx-auto flex items-center justify-center shadow-lg border-2 border-white">
+            <Anchor className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">BahariSafe</h1>
+            <p className="text-xs text-slate-600 font-medium leading-relaxed">
+              Real-time marine weather safety & risk assessment for fishermen on Lake Victoria, Turkana, and the Kenyan Coast.
+            </p>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <button
+              onClick={() => setUseDemoMode(false)}
+              className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-2xl shadow-lg flex items-center justify-center space-x-2 transition transform active:scale-95"
+            >
+              <Wifi className="w-4 h-4" />
+              <span>LAUNCH LIVE API MODE</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setUseDemoMode(true)}
+              className="w-full py-3.5 px-4 bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs rounded-2xl shadow-lg flex items-center justify-center space-x-2 transition transform active:scale-95"
+            >
+              <Play className="w-4 h-4" />
+              <span>LAUNCH OFFLINE DEMO SCENARIOS</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="pt-2 text-[10px] text-slate-400 font-medium">
+            Maritime Safety Application • Sign-up & Accounts coming soon
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // MAIN APP INTERFACE
+  // ==========================================
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col relative overflow-hidden font-sans select-none">
       
-      {/* BACKGROUND IMAGE */}
       <div 
         className="fixed inset-0 bg-cover bg-top bg-no-repeat pointer-events-none z-0"
         style={{ backgroundImage: `url('/fisherman-bg.jpg')` }}
@@ -348,9 +402,17 @@ export default function App() {
 
       <div className="w-full sm:max-w-md sm:mx-auto min-h-screen flex flex-col relative sm:shadow-2xl z-10 pb-20">
         
-        {/* TOP HEADER */}
+        {/* TOP HEADER WITH BACK ARROW */}
         <header className="px-4 pt-4 pb-2 flex items-center justify-between text-white drop-shadow-md sticky top-0 z-50 bg-slate-950/30 backdrop-blur-sm">
           <div className="flex items-center space-x-2.5">
+            <button
+              onClick={() => setUseDemoMode(null)}
+              className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-2 rounded-2xl border border-white/35 text-white shadow transition flex items-center space-x-1"
+              title="Back to Mode Selection"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+
             <div className="bg-white/25 backdrop-blur-md p-2 rounded-2xl border border-white/35 text-white shadow">
               <Anchor className="w-5 h-5" />
             </div>
@@ -373,31 +435,8 @@ export default function App() {
               <Bell className="w-4 h-4" />
               <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-slate-900"></span>
             </button>
-            
-            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-white/20 backdrop-blur-md hover:bg-white/30 rounded-2xl text-white border border-white/30 shadow transition">
-              {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-            </button>
           </div>
         </header>
-
-        {/* SLIDEOUT MENU */}
-        {isMobileMenuOpen && (
-          <div className="mx-4 mt-2 bg-white/95 backdrop-blur-xl border border-white/40 rounded-3xl p-4 z-50 shadow-2xl space-y-3 text-slate-900">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">App Mode</div>
-            <button
-              onClick={() => { setUseDemoMode(!useDemoMode); setIsMobileMenuOpen(false); }}
-              className={`w-full flex items-center justify-between p-3 rounded-2xl text-xs font-semibold transition ${
-                useDemoMode ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              }`}
-            >
-              <span className="flex items-center space-x-2">
-                {useDemoMode ? <WifiOff className="w-4 h-4" /> : <Wifi className="w-4 h-4" />}
-                <span>{useDemoMode ? 'Offline Demo Mode' : 'Live API Mode'}</span>
-              </span>
-              <span className="text-[10px] underline">Toggle</span>
-            </button>
-          </div>
-        )}
 
         {/* MAIN SCROLLABLE CONTENT */}
         <main className="flex-1 p-4 space-y-3.5 overflow-y-auto pb-24">
@@ -411,7 +450,9 @@ export default function App() {
                     <Compass className="w-3.5 h-3.5 text-sky-600" />
                     <span>{t.targetSite}</span>
                   </label>
-                  <span className="text-[10px] px-2 py-0.5 bg-sky-100 text-sky-700 rounded-full font-bold">Live Calc</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${useDemoMode ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                    {useDemoMode ? 'Demo Mode' : 'Live API'}
+                  </span>
                 </div>
 
                 <select
