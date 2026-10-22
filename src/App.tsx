@@ -499,6 +499,21 @@ export default function App() {
                       </button>
                     ))}
                   </div>
+
+                  {/* 24-HOUR ADVISORY NOTICE */}
+                  {timeWindow === 24 && (
+                    <div className="mt-2.5 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 font-medium space-y-1">
+                      <div className="font-extrabold flex items-center space-x-1.5 text-amber-800">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{lang === 'EN' ? '24-Hour Extended Trip Advisory' : 'Onyo la Safari ya Saa 24'}</span>
+                      </div>
+                      <p>
+                        {lang === 'EN'
+                          ? 'Planning a full 24-hour stay on small craft is extremely hazardous due to unpredictable midnight squalls and shifting night gales. We recommend returning before sunset.'
+                          : 'Kukaa majini kwa saa 24 mfululizo kwa vyombo vidogo ni hatari kubwa kutokana na dhoruba za usiku. Tunapendekeza kurudi kabla ya jua kuzama.'}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {useDemoMode && (
@@ -605,6 +620,42 @@ export default function App() {
                   <p className="text-xs opacity-95 font-medium">{lang === 'EN' ? style.labelEn : style.labelSwa}</p>
                 </div>
               ) : null}
+
+              {/* 24-HOUR DETAILED HOURLY TIMELINE DISPLAY ON HOME TAB */}
+              {timeWindow === 24 && (
+                <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                      <Clock className="w-4 h-4 text-sky-600" />
+                      <span>{lang === 'EN' ? '24-Hour Forecast Schedule' : 'Mwenendo wa Saa 24 Hapa'}</span>
+                    </span>
+                    <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-full">Complete Timeline</span>
+                  </div>
+
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {[
+                      { time: '06:00 AM', wind: '6.2 kts', wave: '0.4 m', status: 'SAFE', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+                      { time: '09:00 AM', wind: '7.8 kts', wave: '0.5 m', status: 'SAFE', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+                      { time: '12:00 PM', wind: '14.2 kts', wave: '1.1 m', status: 'CAUTION', bg: 'bg-amber-50 text-amber-800 border-amber-200' },
+                      { time: '03:00 PM', wind: '22.5 kts', wave: '1.8 m', status: 'DANGER', bg: 'bg-orange-50 text-orange-800 border-orange-200' },
+                      { time: '06:00 PM', wind: '18.0 kts', wave: '1.4 m', status: 'CAUTION', bg: 'bg-amber-50 text-amber-800 border-amber-200' },
+                      { time: '09:00 PM', wind: '12.0 kts', wave: '0.9 m', status: 'CAUTION', bg: 'bg-amber-50 text-amber-800 border-amber-200' },
+                      { time: '12:00 AM (Night)', wind: '25.4 kts', wave: '2.1 m', status: 'DANGER', bg: 'bg-rose-50 text-rose-800 border-rose-200' },
+                      { time: '03:00 AM (Late)', wind: '19.8 kts', wave: '1.6 m', status: 'DANGER', bg: 'bg-orange-50 text-orange-800 border-orange-200' },
+                    ].map((h, i) => (
+                      <div key={i} className={`flex items-center justify-between p-2.5 rounded-2xl border ${h.bg} shadow-xs`}>
+                        <div className="flex items-center space-x-2.5">
+                          <div className="font-mono font-extrabold text-[11px]">{h.time}</div>
+                          <div className="text-[10px] opacity-80">Wind: {h.wind} | Wave: {h.wave}</div>
+                        </div>
+                        <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-lg bg-white/80">
+                          {h.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {assessment && assessment.warnings.length > 0 && (
                 <div className="bg-rose-500/90 text-white backdrop-blur-md border border-rose-400 rounded-3xl p-4 shadow-xl space-y-2">
