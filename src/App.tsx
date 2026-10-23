@@ -5,8 +5,9 @@ import { evaluateRisk, type RiskLevel, type WeatherMetrics } from './lib/riskEng
 import { weatherClient, summarizeHours, toWeatherMetrics, friendlyMessage } from './lib/weather';
 import { marineClient } from './lib/marine/marineClient';
 import { getWorstWaveHeight } from './lib/marine/marineBridge';
-import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Compass, Thermometer, Wind, Waves, Eye, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, AlertCircle, Phone, LifeBuoy, ArrowRight, Play, ArrowLeft } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Compass, Thermometer, Wind, Waves, Eye, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, AlertCircle, Phone, LifeBuoy, ArrowRight, Play, ArrowLeft, Smartphone } from 'lucide-react';
 import { MapView } from './components/MapView';
+import { FeaturePhoneSimulator } from './components/FeaturePhoneSimulator';
 
 const KMH_PER_KNOT = 1.852;
 const LAKE_WAVE_PER_KNOT = 0.04;
@@ -114,6 +115,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<'home' | 'forecast' | 'map' | 'alerts' | 'settings'>('home');
+
+  // Feature Phone Simulator Modal State
+  const [showPhoneSimulator, setShowPhoneSimulator] = useState<boolean>(false);
 
   // Settings State
   const [lang, setLang] = useState<'EN' | 'SWA'>('EN');
@@ -321,6 +325,9 @@ export default function App() {
       />
 
       <div className="fixed top-0 inset-x-0 h-32 bg-gradient-to-b from-slate-950/70 via-slate-900/30 to-transparent pointer-events-none z-0" />
+
+      {/* FEATURE PHONE SIMULATOR MODAL */}
+      <FeaturePhoneSimulator isOpen={showPhoneSimulator} onClose={() => setShowPhoneSimulator(false)} />
 
       {/* FREELY POSITIONABLE FLOATING SOS BUTTON */}
       <div
@@ -771,6 +778,24 @@ export default function App() {
                   <h2 className="text-base font-extrabold text-slate-900">{lang === 'EN' ? 'App Preferences' : 'Mipangilio ya Programu'}</h2>
                   <p className="text-xs text-slate-500 font-medium">{lang === 'EN' ? 'Customize units, vessel profiles & alerts' : 'Badilisha vipimo, vyombo vya uvuvi na tahadhari'}</p>
                 </div>
+              </div>
+
+              {/* FEATURE PHONE USSD & SMS SIMULATOR BUTTON */}
+              <div className="bg-emerald-600 text-white rounded-3xl p-4 shadow-xl space-y-2 border border-emerald-500">
+                <div className="flex items-center space-x-2 font-bold text-xs uppercase tracking-wider">
+                  <Smartphone className="w-4 h-4 text-white" />
+                  <span>{lang === 'EN' ? 'Feature Phone USSD & SMS Demo' : 'Uigaji wa Simu za Vitufe'}</span>
+                </div>
+                <p className="text-xs opacity-95">
+                  {lang === 'EN' ? 'Test how button-phone users access weather & safety via *483# and SMS shortcode 20880.' : 'Jaribu jinsi wavuvi wa simu za kawaida wanavyopata taarifa kupitia *483#.'}
+                </p>
+                <button
+                  onClick={() => setShowPhoneSimulator(true)}
+                  className="w-full py-2.5 bg-white text-emerald-800 font-black text-xs rounded-2xl shadow hover:bg-emerald-50 transition flex items-center justify-center space-x-1.5"
+                >
+                  <Phone className="w-4 h-4" />
+                  <span>OPEN USSD / SMS SIMULATOR</span>
+                </button>
               </div>
 
               <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
