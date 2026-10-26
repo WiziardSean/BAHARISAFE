@@ -5,9 +5,10 @@ import { evaluateRisk, type RiskLevel, type WeatherMetrics } from './lib/riskEng
 import { weatherClient, summarizeHours, toWeatherMetrics, friendlyMessage } from './lib/weather';
 import { marineClient } from './lib/marine/marineClient';
 import { getWorstWaveHeight } from './lib/marine/marineBridge';
-import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Compass, Thermometer, Wind, Waves, Eye, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, AlertCircle, Phone, LifeBuoy, ArrowRight, Play, ArrowLeft, Smartphone } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Thermometer, Wind, Waves, Eye, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, AlertCircle, Phone, LifeBuoy, ArrowRight, ArrowLeft, Smartphone, ShieldCheck, Compass } from 'lucide-react';
 import { MapView } from './components/MapView';
 import { FeaturePhoneSimulator } from './components/FeaturePhoneSimulator';
+import { EvaluationPortal } from './components/EvaluationPortal';
 
 const KMH_PER_KNOT = 1.852;
 const LAKE_WAVE_PER_KNOT = 0.04;
@@ -35,6 +36,8 @@ const TRANSLATIONS = {
     home: 'Home',
     forecast: 'Forecast',
     map: 'Map',
+    kabambe: 'Kabambe',
+    evaluate: 'Evaluate',
     alerts: 'Alerts',
     settings: 'Settings',
     none: 'None',
@@ -62,6 +65,8 @@ const TRANSLATIONS = {
     home: 'Nyumbani',
     forecast: 'Utabiri',
     map: 'Ramani',
+    kabambe: 'Kabambe',
+    evaluate: 'Tathmini',
     alerts: 'Alerts',
     settings: 'Mipangilio',
     none: 'Hakuna',
@@ -107,19 +112,14 @@ export default function App() {
   const [selectedSite, setSelectedSite] = useState<LandingSite>(LANDING_SITES[0]);
   const [timeWindow, setTimeWindow] = useState<number>(12);
   
-  // null = Show Live/Demo Gateway Screen first
   const [useDemoMode, setUseDemoMode] = useState<boolean | null>(null);
 
   const [demoScenarioId, setDemoScenarioId] = useState<string>('calm-morning');
   const [liveMetrics, setLiveMetrics] = useState<WeatherMetrics | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [currentTab, setCurrentTab] = useState<'home' | 'forecast' | 'map' | 'alerts' | 'settings'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'forecast' | 'map' | 'kabambe' | 'evaluation' | 'alerts' | 'settings'>('home');
 
-  // Feature Phone Simulator Modal State
-  const [showPhoneSimulator, setShowPhoneSimulator] = useState<boolean>(false);
-
-  // Settings State
   const [lang, setLang] = useState<'EN' | 'SWA'>('EN');
   const [speedUnit, setSpeedUnit] = useState<'kts' | 'kmh' | 'ms'>('kts');
   const [waveUnit, setWaveUnit] = useState<'m' | 'ft'>('m');
@@ -127,7 +127,6 @@ export default function App() {
   const [smsAlerts, setSmsAlerts] = useState<boolean>(true);
   const [vesselType, setVesselType] = useState<string>('canoe');
 
-  // SOS Modal & Draggable Button State
   const [showSosModal, setShowSosModal] = useState<boolean>(false);
   const [sosPosition, setSosPosition] = useState<{ x: number; y: number }>({ x: window.innerWidth - 80, y: window.innerHeight - 200 });
   const draggingRef = useRef<boolean>(false);
@@ -261,9 +260,6 @@ export default function App() {
     return `${meters.toFixed(1)} m`;
   };
 
-  // ==========================================
-  // INITIAL GATEWAY SCREEN (LIVE OR DEMO SELECTOR)
-  // ==========================================
   if (useDemoMode === null) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center relative px-4 font-sans select-none">
@@ -299,7 +295,7 @@ export default function App() {
               onClick={() => setUseDemoMode(true)}
               className="w-full py-3.5 px-4 bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs rounded-2xl shadow-lg flex items-center justify-center space-x-2 transition transform active:scale-95"
             >
-              <Play className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4" />
               <span>LAUNCH OFFLINE DEMO SCENARIOS</span>
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -313,9 +309,11 @@ export default function App() {
     );
   }
 
-  // ==========================================
-  // MAIN APP INTERFACE
-  // ==========================================
+  // IF KABAMBE TAB IS SELECTED, RENDER FULLSCREEN PHONE
+  if (currentTab === 'kabambe') {
+    return <FeaturePhoneSimulator onBackToHome={() => setCurrentTab('home')} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col relative overflow-hidden font-sans select-none">
       
@@ -325,9 +323,6 @@ export default function App() {
       />
 
       <div className="fixed top-0 inset-x-0 h-32 bg-gradient-to-b from-slate-950/70 via-slate-900/30 to-transparent pointer-events-none z-0" />
-
-      {/* FEATURE PHONE SIMULATOR MODAL */}
-      <FeaturePhoneSimulator isOpen={showPhoneSimulator} onClose={() => setShowPhoneSimulator(false)} />
 
       {/* FREELY POSITIONABLE FLOATING SOS BUTTON */}
       <div
@@ -347,7 +342,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* SOS EMERGENCY CHOICE MODAL */}
       {showSosModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-4 text-slate-900 animate-in fade-in zoom-in duration-200">
@@ -409,7 +403,6 @@ export default function App() {
 
       <div className="w-full sm:max-w-md sm:mx-auto min-h-screen flex flex-col relative sm:shadow-2xl z-10 pb-20">
         
-        {/* TOP HEADER WITH BACK ARROW */}
         <header className="px-4 pt-4 pb-2 flex items-center justify-between text-white drop-shadow-md sticky top-0 z-50 bg-slate-950/30 backdrop-blur-sm">
           <div className="flex items-center space-x-2.5">
             <button
@@ -445,12 +438,11 @@ export default function App() {
           </div>
         </header>
 
-        {/* MAIN SCROLLABLE CONTENT */}
         <main className="flex-1 p-4 space-y-3.5 overflow-y-auto pb-24">
 
-          {/* HOME VIEW */}
           {currentTab === 'home' && (
             <div className="space-y-3.5">
+
               <div className="bg-white/85 backdrop-blur-md border border-white/60 rounded-3xl p-3.5 shadow-xl space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center space-x-1.5">
@@ -507,7 +499,6 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* 24-HOUR ADVISORY NOTICE */}
                   {timeWindow === 24 && (
                     <div className="mt-2.5 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 font-medium space-y-1">
                       <div className="font-extrabold flex items-center space-x-1.5 text-amber-800">
@@ -628,7 +619,6 @@ export default function App() {
                 </div>
               ) : null}
 
-              {/* 24-HOUR DETAILED HOURLY TIMELINE DISPLAY ON HOME TAB */}
               {timeWindow === 24 && (
                 <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -682,7 +672,6 @@ export default function App() {
             </div>
           )}
 
-          {/* VIEW: MAP */}
           {currentTab === 'map' && (
             <div className="space-y-3">
               <div className="bg-white/90 backdrop-blur-md border border-white/80 p-3 rounded-3xl flex items-center justify-between shadow-lg">
@@ -700,7 +689,10 @@ export default function App() {
             </div>
           )}
 
-          {/* VIEW: FORECAST TAB */}
+          {currentTab === 'evaluation' && (
+            <EvaluationPortal />
+          )}
+
           {currentTab === 'forecast' && (
             <div className="space-y-3.5">
               <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl flex items-center space-x-3">
@@ -767,7 +759,6 @@ export default function App() {
             </div>
           )}
 
-          {/* VIEW: SETTINGS */}
           {currentTab === 'settings' && (
             <div className="space-y-3.5">
               <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl flex items-center space-x-3">
@@ -778,24 +769,6 @@ export default function App() {
                   <h2 className="text-base font-extrabold text-slate-900">{lang === 'EN' ? 'App Preferences' : 'Mipangilio ya Programu'}</h2>
                   <p className="text-xs text-slate-500 font-medium">{lang === 'EN' ? 'Customize units, vessel profiles & alerts' : 'Badilisha vipimo, vyombo vya uvuvi na tahadhari'}</p>
                 </div>
-              </div>
-
-              {/* FEATURE PHONE USSD & SMS SIMULATOR BUTTON */}
-              <div className="bg-emerald-600 text-white rounded-3xl p-4 shadow-xl space-y-2 border border-emerald-500">
-                <div className="flex items-center space-x-2 font-bold text-xs uppercase tracking-wider">
-                  <Smartphone className="w-4 h-4 text-white" />
-                  <span>{lang === 'EN' ? 'Feature Phone USSD & SMS Demo' : 'Uigaji wa Simu za Vitufe'}</span>
-                </div>
-                <p className="text-xs opacity-95">
-                  {lang === 'EN' ? 'Test how button-phone users access weather & safety via *483# and SMS shortcode 20880.' : 'Jaribu jinsi wavuvi wa simu za kawaida wanavyopata taarifa kupitia *483#.'}
-                </p>
-                <button
-                  onClick={() => setShowPhoneSimulator(true)}
-                  className="w-full py-2.5 bg-white text-emerald-800 font-black text-xs rounded-2xl shadow hover:bg-emerald-50 transition flex items-center justify-center space-x-1.5"
-                >
-                  <Phone className="w-4 h-4" />
-                  <span>OPEN USSD / SMS SIMULATOR</span>
-                </button>
               </div>
 
               <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
@@ -966,12 +939,14 @@ export default function App() {
 
         </main>
 
-        {/* BOTTOM NAVIGATION BAR */}
-        <nav className="fixed bottom-0 inset-x-0 sm:max-w-md sm:mx-auto bg-white/90 backdrop-blur-xl border-t border-slate-200/80 px-4 py-2 flex items-center justify-around z-50 shadow-2xl">
+        {/* BOTTOM NAVIGATION BAR WITH KABAMBE TAB */}
+        <nav className="fixed bottom-0 inset-x-0 sm:max-w-md sm:mx-auto bg-white/90 backdrop-blur-xl border-t border-slate-200/80 px-2 py-2 flex items-center justify-around z-50 shadow-2xl">
           {[
             { id: 'home', label: t.home, icon: HomeIcon },
             { id: 'forecast', label: t.forecast, icon: Calendar },
             { id: 'map', label: t.map, icon: MapIcon },
+            { id: 'kabambe', label: t.kabambe, icon: Smartphone },
+            { id: 'evaluation', label: t.evaluate, icon: ShieldCheck },
             { id: 'alerts', label: t.alerts, icon: Bell },
             { id: 'settings', label: t.settings, icon: Settings },
           ].map((tab) => {
@@ -981,12 +956,12 @@ export default function App() {
               <button
                 key={tab.id}
                 onClick={() => setCurrentTab(tab.id as any)}
-                className={`flex flex-col items-center py-1 px-3 rounded-2xl transition ${
+                className={`flex flex-col items-center py-1 px-2 rounded-2xl transition ${
                   isActive ? 'text-sky-600 font-extrabold scale-105' : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
                 <Icon className="w-5 h-5 mb-0.5" />
-                <span className="text-[10px]">{tab.label}</span>
+                <span className="text-[9px]">{tab.label}</span>
               </button>
             );
           })}
