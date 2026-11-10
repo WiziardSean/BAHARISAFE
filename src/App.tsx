@@ -9,12 +9,13 @@ import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, L
 import { MapView } from './components/MapView';
 import { FeaturePhoneSimulator } from './components/FeaturePhoneSimulator';
 import { EvaluationPortal } from './components/EvaluationPortal';
+import { LanguageSelector } from './components/LanguageSelector';
 
 const KMH_PER_KNOT = 1.852;
 const LAKE_WAVE_PER_KNOT = 0.04;
 
-const TRANSLATIONS = {
-  EN: {
+const TRANSLATIONS: Record<string, Record<string, string>> = {
+  en: {
     appTitle: 'BahariSafe',
     appSubtitle: 'Marine Weather for Fishermen',
     targetSite: 'Landing Site',
@@ -43,7 +44,7 @@ const TRANSLATIONS = {
     none: 'None',
     active: 'ACTIVE',
   },
-  SWA: {
+  sw: {
     appTitle: 'BahariSafe',
     appSubtitle: 'Hali ya Hewa ya Bahari na Ziwa',
     targetSite: 'Eneo la Kutua / Mwalo',
@@ -71,6 +72,93 @@ const TRANSLATIONS = {
     settings: 'Mipangilio',
     none: 'Hakuna',
     active: 'IMETANGAZWA',
+  },
+  gir: {
+    appTitle: 'BahariSafe',
+    appSubtitle: 'Hali ya Hewa ya Bahari na Pwani',
+    targetSite: 'Mwalo wa Kuteremera',
+    timeHorizon: 'Muda wa Safari',
+    morning: 'Subira',
+    afternoon: 'Mchana',
+    evening: 'Jioni',
+    hours24: 'Saa 24',
+    currentConditions: 'Hali ya Hewa Hha',
+    windSpeed: 'Kasi ya Mhepo',
+    waveHeight: 'Kimo cha Mawimbi',
+    visibility: 'Uwezo wa Kuona',
+    squallRisk: 'Hatari ya Dhoruba',
+    safetyStatus: 'Hali ya Usalama',
+    riskScore: 'Kiwango cha Hatari',
+    okFishing: 'Bahari ni Salama kuvua',
+    noFishing: 'USIENDE Kuvua Leo',
+    warnings: 'Maonyo ya Hatari',
+    home: 'Nyumbani',
+    forecast: 'Utabiri',
+    map: 'Ramani',
+    kabambe: 'Kabambe',
+    evaluate: 'Tathmini',
+    alerts: 'Taarifa',
+    settings: 'Mipangilio',
+    none: 'Hakuna',
+    active: 'YALIPUKA',
+  },
+  luo: {
+    appTitle: 'BahariSafe',
+    appSubtitle: 'Yamo gi Pi Hoondo ne Jo-oyo',
+    targetSite: 'Nanga mar Dhi Nyathi',
+    timeHorizon: 'Geng\' Nyadhi',
+    morning: 'Odhiambo',
+    afternoon: 'Wendo',
+    evening: 'Kiny',
+    hours24: 'Dakika 24',
+    currentConditions: 'Yamo Sani',
+    windSpeed: 'Goyo mar Yamo',
+    waveHeight: 'Kimo mar Pi',
+    visibility: 'Neno Malo',
+    squallRisk: 'Paro mar Yamo Madongo',
+    safetyStatus: 'Kare mar Ngima',
+    riskScore: 'Kimo mar Rach',
+    okFishing: 'Ber Dhi Timo Rapudo',
+    noFishing: 'Kik IDhi Timo Rapudo',
+    warnings: 'K koso mar Paro',
+    home: 'Pacho',
+    forecast: 'Koro',
+    map: 'Kabu',
+    kabambe: 'Kabambe',
+    evaluate: 'Chano',
+    alerts: 'Koro',
+    settings: 'Chike',
+    none: 'Onge',
+    active: 'CHOKO',
+  },
+  tur: {
+    appTitle: 'BahariSafe',
+    appSubtitle: 'Ngiti ka Namer',
+    targetSite: 'Akanut',
+    timeHorizon: 'Ede ka Arai',
+    morning: 'Kote',
+    afternoon: 'Akwap',
+    evening: 'Awas',
+    hours24: 'Saa 24',
+    currentConditions: 'Ngiti Neni',
+    windSpeed: 'Goyo ka Yamo',
+    waveHeight: 'Kimo ka Awar',
+    visibility: 'Neni Arai',
+    squallRisk: 'Akou ka Dhoruba',
+    safetyStatus: 'Aswam ka Arai',
+    riskScore: 'Ede ka Akou',
+    okFishing: 'Asubu Aiwok',
+    noFishing: 'Mam Aiwok',
+    warnings: 'Ngisi ka Akou',
+    home: 'Ateker',
+    forecast: 'Ede',
+    map: 'Ep',
+    kabambe: 'Kabambe',
+    evaluate: 'Tathmini',
+    alerts: 'Alerts',
+    settings: 'Settings',
+    none: 'Erai',
+    active: 'ACTIVE',
   }
 };
 
@@ -120,7 +208,7 @@ export default function App() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<'home' | 'forecast' | 'map' | 'kabambe' | 'evaluation' | 'alerts' | 'settings'>('home');
 
-  const [lang, setLang] = useState<'EN' | 'SWA'>('EN');
+  const [currentLang, setCurrentLang] = useState<string>('en'); // Vambo AI active language code
   const [speedUnit, setSpeedUnit] = useState<'kts' | 'kmh' | 'ms'>('kts');
   const [waveUnit, setWaveUnit] = useState<'m' | 'ft'>('m');
   const [offlineCaching, setOfflineCaching] = useState<boolean>(true);
@@ -133,7 +221,8 @@ export default function App() {
   const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const hasMoved = useRef<boolean>(false);
 
-  const t = TRANSLATIONS[lang];
+  const activeLangKey = TRANSLATIONS[currentLang] ? currentLang : 'en';
+  const t = TRANSLATIONS[activeLangKey];
 
   const onPointerDown = (clientX: number, clientY: number) => {
     draggingRef.current = true;
@@ -309,9 +398,8 @@ export default function App() {
     );
   }
 
-  // IF KABAMBE TAB IS SELECTED, RENDER FULLSCREEN PHONE
   if (currentTab === 'kabambe') {
-    return <FeaturePhoneSimulator onBackToHome={() => setCurrentTab('home')} />;
+    return <FeaturePhoneSimulator onBackToHome={() => setCurrentTab('home')} currentLang={currentLang} />;
   }
 
   return (
@@ -403,7 +491,8 @@ export default function App() {
 
       <div className="w-full sm:max-w-md sm:mx-auto min-h-screen flex flex-col relative sm:shadow-2xl z-10 pb-20">
         
-        <header className="px-4 pt-4 pb-2 flex items-center justify-between text-white drop-shadow-md sticky top-0 z-50 bg-slate-950/30 backdrop-blur-sm">
+        {/* HEADER */}
+        <header className="px-4 pt-4 pb-2 flex items-center justify-between text-white drop-shadow-md sticky top-0 z-50 bg-slate-950/40 backdrop-blur-md">
           <div className="flex items-center space-x-2.5">
             <button
               onClick={() => setUseDemoMode(null)}
@@ -423,13 +512,10 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-2">
-            <button 
-              onClick={() => setLang(lang === 'EN' ? 'SWA' : 'EN')} 
-              className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-2xl border border-white/30 shadow text-xs font-bold text-white transition active:scale-95"
-            >
-              <Globe className="w-3.5 h-3.5 text-sky-200" />
-              <span>{lang === 'EN' ? 'SWA 🇰🇪' : 'ENG 🇬🇧'}</span>
-            </button>
+            <LanguageSelector 
+              currentLang={currentLang} 
+              onLanguageChange={setCurrentLang} 
+            />
 
             <button onClick={() => setCurrentTab('alerts')} className="p-2 bg-white/20 backdrop-blur-md hover:bg-white/30 rounded-2xl relative text-white border border-white/30 shadow transition">
               <Bell className="w-4 h-4" />
@@ -503,10 +589,10 @@ export default function App() {
                     <div className="mt-2.5 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 font-medium space-y-1">
                       <div className="font-extrabold flex items-center space-x-1.5 text-amber-800">
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                        <span>{lang === 'EN' ? '24-Hour Extended Trip Advisory' : 'Onyo la Safari ya Saa 24'}</span>
+                        <span>{activeLangKey === 'en' ? '24-Hour Extended Trip Advisory' : 'Onyo la Safari ya Saa 24'}</span>
                       </div>
                       <p>
-                        {lang === 'EN'
+                        {activeLangKey === 'en'
                           ? 'Planning a full 24-hour stay on small craft is extremely hazardous due to unpredictable midnight squalls and shifting night gales. We recommend returning before sunset.'
                           : 'Kukaa majini kwa saa 24 mfululizo kwa vyombo vidogo ni hatari kubwa kutokana na dhoruba za usiku. Tunapendekeza kurudi kabla ya jua kuzama.'}
                       </p>
@@ -615,7 +701,7 @@ export default function App() {
                   </div>
 
                   <p className="text-sm font-black">{assessment.canGoFishing ? `✅ ${t.okFishing}` : `❌ ${t.noFishing}`}</p>
-                  <p className="text-xs opacity-95 font-medium">{lang === 'EN' ? style.labelEn : style.labelSwa}</p>
+                  <p className="text-xs opacity-95 font-medium">{activeLangKey === 'en' ? style.labelEn : style.labelSwa}</p>
                 </div>
               ) : null}
 
@@ -624,7 +710,7 @@ export default function App() {
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                     <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
                       <Clock className="w-4 h-4 text-sky-600" />
-                      <span>{lang === 'EN' ? '24-Hour Forecast Schedule' : 'Mwenendo wa Saa 24 Hapa'}</span>
+                      <span>{activeLangKey === 'en' ? '24-Hour Forecast Schedule' : 'Mwenendo wa Saa 24 Hapa'}</span>
                     </span>
                     <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-full">Complete Timeline</span>
                   </div>
@@ -700,7 +786,7 @@ export default function App() {
                   <Calendar className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-base font-extrabold text-slate-900">{lang === 'EN' ? 'Hourly Weather Forecast' : 'Utabiri wa Hali ya Hewa kwa Saa'}</h2>
+                  <h2 className="text-base font-extrabold text-slate-900">{activeLangKey === 'en' ? 'Hourly Weather Forecast' : 'Utabiri wa Hali ya Hewa kwa Saa'}</h2>
                   <p className="text-xs text-slate-500 font-medium">{selectedSite.name} — {selectedSite.region}</p>
                 </div>
               </div>
@@ -708,11 +794,11 @@ export default function App() {
               <div className="bg-emerald-500 text-white rounded-3xl p-4 shadow-xl space-y-2 border border-emerald-400">
                 <div className="flex items-center space-x-2 font-bold text-xs uppercase tracking-wider">
                   <CheckCircle2 className="w-4 h-4 text-white" />
-                  <span>{lang === 'EN' ? 'Recommended Safe Departure Window' : 'Muda Salama wa Kuondoka'}</span>
+                  <span>{activeLangKey === 'en' ? 'Recommended Safe Departure Window' : 'Muda Salama wa Kuondoka'}</span>
                 </div>
                 <div className="text-lg font-black">05:00 AM – 10:00 AM</div>
                 <p className="text-xs opacity-95 font-medium">
-                  {lang === 'EN' ? 'Calm morning waters with low wind gusts (< 8 kts). Ideal for small craft fishing.' : 'Maji tulivu ya asubuhi na upepo mdogo. Inafaa kwa vyombo vidogo.'}
+                  {activeLangKey === 'en' ? 'Calm morning waters with low wind gusts (< 8 kts). Ideal for small craft fishing.' : 'Maji tulivu ya asubuhi na upepo mdogo. Inafaa kwa vyombo vidogo.'}
                 </p>
               </div>
 
@@ -720,7 +806,7 @@ export default function App() {
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
                     <Clock className="w-4 h-4 text-sky-600" />
-                    <span>{lang === 'EN' ? 'Next 24 Hours Timeline' : 'Mwenendo wa Saa 24 Zijazo'}</span>
+                    <span>{activeLangKey === 'en' ? 'Next 24 Hours Timeline' : 'Mwenendo wa Saa 24 Zijazo'}</span>
                   </span>
                   <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-full">Updated Live</span>
                 </div>
@@ -750,10 +836,10 @@ export default function App() {
               <div className="bg-amber-500/90 text-slate-950 rounded-3xl p-4 shadow-xl space-y-1.5 border border-amber-400">
                 <div className="flex items-center space-x-2 font-bold text-xs uppercase tracking-wider">
                   <AlertCircle className="w-4 h-4" />
-                  <span>{lang === 'EN' ? 'Afternoon Wind Advisory' : 'Onyo la Upepo wa Mchana'}</span>
+                  <span>{activeLangKey === 'en' ? 'Afternoon Wind Advisory' : 'Onyo la Upepo wa Mchana'}</span>
                 </div>
                 <p className="text-xs font-semibold">
-                  {lang === 'EN' ? 'Expect wind speeds to pick up significantly past 2:00 PM across Lake Victoria and coastal channels. Ensure return by noon.' : 'Tarajia upepo kuongezeka baada ya saa 8:00 mchana. Hakikisha umerudi kabla ya adhuhuri.'}
+                  {activeLangKey === 'en' ? 'Expect wind speeds to pick up significantly past 2:00 PM across Lake Victoria and coastal channels. Ensure return by noon.' : 'Tarajia upepo kuongezeka baada ya saa 8:00 mchana. Hakikisha umerudi kabla ya adhuhuri.'}
                 </p>
               </div>
             </div>
@@ -766,36 +852,8 @@ export default function App() {
                   <Settings className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-base font-extrabold text-slate-900">{lang === 'EN' ? 'App Preferences' : 'Mipangilio ya Programu'}</h2>
-                  <p className="text-xs text-slate-500 font-medium">{lang === 'EN' ? 'Customize units, vessel profiles & alerts' : 'Badilisha vipimo, vyombo vya uvuvi na tahadhari'}</p>
-                </div>
-              </div>
-
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
-                <div className="flex items-center space-x-2 text-slate-800 font-bold text-xs uppercase tracking-wider">
-                  <Globe className="w-4 h-4 text-sky-600" />
-                  <span>Language / Lugha</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setLang('EN')}
-                    className={`p-3 rounded-2xl font-bold text-xs flex items-center justify-between border transition ${
-                      lang === 'EN' ? 'bg-sky-600 text-white border-sky-500 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <span>English (EN)</span>
-                    {lang === 'EN' && <Check className="w-4 h-4" />}
-                  </button>
-
-                  <button
-                    onClick={() => setLang('SWA')}
-                    className={`p-3 rounded-2xl font-bold text-xs flex items-center justify-between border transition ${
-                      lang === 'SWA' ? 'bg-sky-600 text-white border-sky-500 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <span>Kiswahili (SWA)</span>
-                    {lang === 'SWA' && <Check className="w-4 h-4" />}
-                  </button>
+                  <h2 className="text-base font-extrabold text-slate-900">App Preferences</h2>
+                  <p className="text-xs text-slate-500 font-medium">Customize units, vessel profiles & alerts</p>
                 </div>
               </div>
 
@@ -939,7 +997,7 @@ export default function App() {
 
         </main>
 
-        {/* BOTTOM NAVIGATION BAR WITH KABAMBE TAB */}
+        {/* BOTTOM NAVIGATION BAR */}
         <nav className="fixed bottom-0 inset-x-0 sm:max-w-md sm:mx-auto bg-white/90 backdrop-blur-xl border-t border-slate-200/80 px-2 py-2 flex items-center justify-around z-50 shadow-2xl">
           {[
             { id: 'home', label: t.home, icon: HomeIcon },

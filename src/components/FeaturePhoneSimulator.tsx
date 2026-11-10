@@ -20,6 +20,7 @@ import { getWorstWaveHeight } from '../lib/marine/marineBridge';
 
 interface FeaturePhoneSimulatorProps {
   onBackToHome?: () => void;
+  currentLang?: string; // <-- Added to accept Vambo AI / Regional language code ('en', 'sw', 'luo', 'tur', 'gir')
 }
 
 type Site = (typeof LANDING_SITES)[number];
@@ -103,9 +104,8 @@ async function fetchReport(site: Site): Promise<Report> {
   }
 }
 
-export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorProps) {
+export function FeaturePhoneSimulator({ onBackToHome, currentLang = 'en' }: FeaturePhoneSimulatorProps) {
   const [screen, setScreen] = useState<Screen>('home');
-  const [lang, setLang] = useState<'EN' | 'SWA'>('EN');
   const [now, setNow] = useState(new Date());
   const [homeSel, setHomeSel] = useState(0);
 
@@ -156,7 +156,14 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
   const threadEnd = useRef<HTMLDivElement>(null);
   const msgId = useRef(100);
 
-  const t = (en: string, sw: string) => (lang === 'EN' ? en : sw);
+  // Multi-language text router based on Vambo AI / regional selection
+  const t = (en: string, sw: string, luo?: string, tur?: string, gir?: string) => {
+    if (currentLang === 'luo' && luo) return luo;
+    if (currentLang === 'tur' && tur) return tur;
+    if (currentLang === 'gir' && gir) return gir;
+    if (currentLang === 'sw' || currentLang === 'SWA') return sw;
+    return en;
+  };
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 15000);
@@ -182,7 +189,10 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
     if (r.state !== 'ok') {
       return t(
         `BAHARISAFE ${site.name}: Live data unavailable. Stay near shore and call 112 if in danger.`,
-        `BAHARISAFE ${site.name}: Hali ya hewa haipatikani. Kaa karibu na pwani, piga 112 ukiwa hatarini.`
+        `BAHARISAFE ${site.name}: Hali ya hewa haipatikani. Kaa karibu na pwani, piga 112 ukiwa hatarini.`,
+        `BAHARISAFE ${site.name}: Information ok wachiero mar yamo ok yot. Konyore kadi 112.`,
+        `BAHARISAFE ${site.name}: Ematak lokite ng'olak. Ng'at kide 112.`,
+        `BAHARISAFE ${site.name}: Habari za hewa azipatikani. Piga 112.`
       );
     }
     return t(
@@ -191,7 +201,16 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
       } Emerg: 112.`,
       `BAHARISAFE ${site.name}: ${r.level} ${r.score}/100. Upepo ${r.windKmh}km/h, Mawimbi ${r.waves}m. ${
         r.safe ? 'Salama kuvua.' : 'USIENDE baharini.'
-      } Dharura: 112.`
+      } Dharura: 112.`,
+      `BAHARISAFE ${site.name}: ${r.level} ${r.score}/100. Yamo ${r.windKmh}km/h, Got ${r.waves}m. ${
+        r.safe ? 'Oyot yawuok.' : 'Kik iwuok.'
+      } Konyruok: 112.`,
+      `BAHARISAFE ${site.name}: ${r.level} ${r.score}/100. Kile ${r.windKmh}km/h. ${
+        r.safe ? 'Epite.' : 'Kotio.'
+      } 112.`,
+      `BAHARISAFE ${site.name}: ${r.level} ${r.score}/100. Upepo ${r.windKmh}km/h. ${
+        r.safe ? 'Salama kuvua.' : 'Usiende.'
+      } 112.`
     );
   };
 
@@ -218,7 +237,10 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
         'in',
         t(
           'Format: BAHARI [SITE]. Example: BAHARI KISUMU. Site not found.',
-          'Muundo: BAHARI [MWALO]. Mfano: BAHARI KISUMU. Mwalo haukupatikana.'
+          'Muundo: BAHARI [MWALO]. Mfano: BAHARI KISUMU. Mwalo haukupatikana.',
+          'Format: BAHARI [MWALO]. Chakore KISUMU. Ok oyengni.',
+          'Format: BAHARI [SITE].',
+          'Muundo: BAHARI [MWALO].'
         )
       );
       setSending(false);
@@ -236,8 +258,11 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
     setUssdStep('main');
     setUssdText(
       t(
-        'Welcome to BahariSafe\n1. Check weather by region\n2. Emergency contacts\n3. Select site',
-        'Karibu BahariSafe\n1. Angalia hali kwa eneo\n2. Nambari za dharura\n3. Chagua mwalo'
+        '1. Check weather by region\n2. Emergency contacts\n3. Select site',
+        '1. Angalia hali kwa eneo\n2. Nambari za dharura\n3. Chagua mwalo',
+        '1. Nonni yamo ka piny\n2. Namba mar konyruok\n3. Yiero mwalo',
+        '1. Nying akwap\n2. Kony\n3. Erite',
+        '1. Angalia hewa\n2. Dharura\n3. Chagua mwalo'
       )
     );
   };
@@ -246,7 +271,9 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
     setSiteList(list);
     setUssdStep('sitelist');
     setUssdText(
-      `${t('Select site:', 'Chagua mwalo:')}\n${list.map((s, i) => `${i + 1}. ${s.name}`).join('\n')}\n0. ${t('Back', 'Rudi')}`
+      `${t('Select site:', 'Chagua mwalo:', 'Yier mwalo:', 'Nying site:', 'Chagua mwalo:')}\n${list
+        .map((s, i) => `${i + 1}. ${s.name}`)
+        .join('\n')}\n0. ${t('Back', 'Rudi', 'Chwok', 'Amoni', 'Rudi')}`
     );
   };
 
@@ -269,7 +296,10 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
         setUssdText(
           t(
             'Select region:\n1. Coast (Ocean)\n2. Lake Victoria\n3. Turkana\n0. Back',
-            'Chagua eneo:\n1. Pwani (Bahari)\n2. Ziwa Victoria\n3. Turkana\n0. Rudi'
+            'Chagua eneo:\n1. Pwani (Bahari)\n2. Ziwa Victoria\n3. Turkana\n0. Rudi',
+            'Yier piny:\n1. Pwani\n2. Ziwa Victoria\n3. Turkana\n0. Chwok',
+            'Enot:\n1. Kosti\n2. Victoria\n3. Turkana\n0. Amoni',
+            'Chagua eneo:\n1. Pwani\n2. Ziwa Victoria\n3. Turkana\n0. Rudi'
           )
         );
       } else if (v === '2') {
@@ -277,13 +307,16 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
         setUssdText(
           t(
             'EMERGENCY\nCoast Guard: 112\nKMA: 0800720021\n0. Back',
-            'DHARURA\nWalinzi wa Pwani: 112\nKMA: 0800720021\n0. Rudi'
+            'DHARURA\nWalinzi wa Pwani: 112\nKMA: 0800720021\n0. Rudi',
+            'KONYRUOK\nCoast Guard: 112\nKMA: 0800720021\n0. Chwok',
+            'KONY\nCoast Guard: 112\nKMA: 0800720021\n0. Amoni',
+            'DHARURA\nWalinzi: 112\nKMA: 0800720021\n0. Rudi'
           )
         );
       } else if (v === '3') {
         showSites(LANDING_SITES.slice(0, 4));
       } else {
-        setUssdText(t('Invalid option. Reply 1, 2 or 3.', 'Chaguo si sahihi. Jibu 1, 2 au 3.'));
+        setUssdText(t('Invalid option. Reply 1, 2 or 3.', 'Chaguo si sahihi.', 'Chaguo ok oyot.', 'Eki.', 'Chaguo si sahihi.'));
       }
       return;
     }
@@ -292,7 +325,7 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
       if (v === '0') return goMain();
       const regions: Record<string, string> = { '1': 'Coast', '2': 'Lake Victoria', '3': 'Turkana' };
       const region = regions[v];
-      if (!region) return setUssdText(t('Invalid option. Reply 1-3 or 0.', 'Chaguo si sahihi. Jibu 1-3 au 0.'));
+      if (!region) return setUssdText(t('Invalid option.', 'Chaguo si sahihi.', 'Chaguo ok oyot.', 'Eki.', 'Chaguo si sahihi.'));
       const list = LANDING_SITES.filter(s => s.region.includes(region)).slice(0, 4);
       return showSites(list.length ? list : LANDING_SITES.slice(0, 4));
     }
@@ -300,32 +333,31 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
     if (ussdStep === 'sitelist') {
       if (v === '0') return goMain();
       const site = siteList[parseInt(v, 10) - 1];
-      if (!site) return setUssdText(t('Invalid site. Try again or 0 to go back.', 'Mwalo si sahihi. Jaribu tena au 0 kurudi.'));
+      if (!site) return setUssdText(t('Invalid site.', 'Mwalo si sahihi.', 'Mwalo ok oyot.', 'Site eki.', 'Mwalo si sahihi.'));
 
       setUssdBusy(true);
-      setUssdText(t(`Loading forecast for ${site.name}...`, `Inapakia utabiri wa ${site.name}...`));
+      setUssdText(t(`Loading forecast for ${site.name}...`, `Inapakia utabiri wa ${site.name}...`, `Inapakia ${site.name}...`, `Loading ${site.name}...`, `Inapakia ${site.name}...`));
       const r = await fetchReport(site);
       setUssdBusy(false);
       setUssdStep('result');
 
       if (r.state === 'offline') {
-        setUssdText(t(`${site.name}\nAPI offline. Safe mode active.\n0. Home`, `${site.name}\nHuduma imezimwa. Hali ya tahadhari.\n0. Mwanzo`));
+        setUssdText(t(`${site.name}\nAPI offline.\n0. Home`, `${site.name}\nHuduma imezimwa.\n0. Mwanzo`, `${site.name}\nOk ineno.\n0. Ure`, `${site.name}\nOffline.\n0. Home`, `${site.name}\nOffline.\n0. Mwanzo`));
       } else if (r.state === 'error') {
-        setUssdText(t(`${site.name}\nUnable to load live metrics.\n0. Home`, `${site.name}\nHaiwezi kupakia data.\n0. Mwanzo`));
+        setUssdText(t(`${site.name}\nError loading data.\n0. Home`, `${site.name}\nHaiwezi kupakia.\n0. Mwanzo`, `${site.name}\nSande.\n0. Ure`, `${site.name}\nError.\n0. Home`, `${site.name}\nHitilafu.\n0. Mwanzo`));
       } else {
         setUssdText(
           `${site.name}: ${r.level} (${r.score}/100)\n` +
-            `${t('Wind', 'Upepo')}: ${r.windKmh}km/h\n` +
-            `${t('Waves', 'Mawimbi')}: ${r.waves}m\n` +
-            `${r.safe ? t('✅ Safe to fish.', '✅ Salama kuvua.') : t('❌ Do not go!', '❌ Usiende!')}\n0. ${t('Home', 'Mwanzo')}`
+            `${t('Wind', 'Upepo', 'Yamo', 'Kile', 'Upepo')}: ${r.windKmh}km/h\n` +
+            `${t('Waves', 'Mawimbi', 'Got', 'Mawimbi', 'Mawimbi')}: ${r.waves}m\n` +
+            `${r.safe ? t('✅ Safe.', '✅ Salama.', '✅ Oyot.', '✅ Epite.', '✅ Salama.') : t('❌ Danger!', '❌ Hatari!', '❌ Rach!', '❌ Kotio!', '❌ Hatari!')}\n0. ${t('Home', 'Mwanzo', 'Ure', 'Home', 'Mwanzo')}`
         );
       }
       return;
     }
 
-    // info / result
     if (v === '0') goMain();
-    else setUssdText(t('Invalid option. Reply 0 to go back.', 'Chaguo si sahihi. Jibu 0 kurudi.'));
+    else setUssdText(t('Invalid option.', 'Chaguo si sahihi.', 'Chaguo ok oyot.', 'Eki.', 'Chaguo si sahihi.'));
   };
 
   /* ------------------------------ Dialer ----------------------------- */
@@ -335,7 +367,7 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
     if (!n) return;
     if (n === USSD_CODE) return openUssd();
     if (n === '112' || n === '999') {
-      setNotice(t('Emergency call simulated. Real services not contacted.', 'Simu ya dharura imeigizwa.'));
+      setNotice(t('Emergency call simulated.', 'Simu ya dharura imeigizwa.', 'Konyruok igizw.', 'Call simulated.', 'Simu ya dharura imeigizwa.'));
     } else {
       setNotice('Connection problem or invalid MMI code.');
     }
@@ -455,21 +487,21 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
     if (notice) return { l: 'OK', lf: () => setNotice(null), r: 'OK', rf: () => setNotice(null) };
     switch (screen) {
       case 'home':
-        return { l: t('Phone', 'Simu'), lf: () => openApp(0), r: t('Messages', 'Ujumbe'), rf: () => openApp(1) };
+        return { l: t('Phone', 'Simu', 'Simu', 'Phone', 'Simu'), lf: () => openApp(0), r: t('Messages', 'Ujumbe', 'Ujumbe', 'SMS', 'Ujumbe'), rf: () => openApp(1) };
       case 'dialer':
-        return { l: dial ? t('Call', 'Piga') : '', lf: placeCall, r: dial ? t('Clear', 'Futa') : t('Back', 'Rudi'), rf: dial ? clearOne : handleBack };
+        return { l: dial ? t('Call', 'Piga', 'Piga', 'Call', 'Piga') : '', lf: placeCall, r: dial ? t('Clear', 'Futa') : t('Back', 'Rudi'), rf: dial ? clearOne : handleBack };
       case 'ussd':
-        return { l: ussdBusy ? '' : t('Send', 'Tuma'), lf: () => void processUssd(), r: ussdInput ? t('Clear', 'Futa') : t('Cancel', 'Ghairi'), rf: ussdInput ? clearOne : handleBack };
+        return { l: ussdBusy ? '' : t('Send', 'Tuma', 'Tuma', 'Send', 'Tuma'), lf: () => void processUssd(), r: ussdInput ? t('Clear', 'Futa') : t('Cancel', 'Ghairi'), rf: ussdInput ? clearOne : handleBack };
       case 'inbox':
-        return { l: t('New', 'Mpya'), lf: openCompose, r: t('Back', 'Rudi'), rf: handleBack };
+        return { l: t('New', 'Mpya', 'Kpe', 'New', 'Mpya'), lf: openCompose, r: t('Back', 'Rudi'), rf: handleBack };
       case 'thread':
-        return { l: t('Reply', 'Jibu'), lf: openCompose, r: t('Back', 'Rudi'), rf: handleBack };
+        return { l: t('Reply', 'Jibu', 'Dwoki', 'Reply', 'Jibu'), lf: openCompose, r: t('Back', 'Rudi'), rf: handleBack };
       case 'compose':
-        return { l: body.trim() ? t('Send', 'Tuma') : '', lf: () => void sendSms(), r: body ? t('Clear', 'Futa') : t('Back', 'Rudi'), rf: body ? clearOne : handleBack };
+        return { l: body.trim() ? t('Send', 'Tuma', 'Tuma', 'Send', 'Tuma') : '', lf: () => void sendSms(), r: body ? t('Clear', 'Futa') : t('Back', 'Rudi'), rf: body ? clearOne : handleBack };
     }
   })();
 
-  // Physical keyboard support (always calls the latest handlers)
+  // Physical keyboard support
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -488,12 +520,10 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
     return () => window.removeEventListener('keydown', fn);
   }, []);
 
-  /* ------------------------------ Render ----------------------------- */
-
   const activeT = threads.find(th => th.id === activeThread);
   const apps = [
-    { icon: Phone, label: t('Phone', 'Simu'), tint: 'from-emerald-400 to-emerald-600' },
-    { icon: MessageSquare, label: t('Messages', 'Ujumbe'), tint: 'from-sky-400 to-blue-600' },
+    { icon: Phone, label: t('Phone', 'Simu', 'Simu', 'Phone', 'Simu'), tint: 'from-emerald-400 to-emerald-600' },
+    { icon: MessageSquare, label: t('Messages', 'Ujumbe', 'Ujumbe', 'SMS', 'Ujumbe'), tint: 'from-sky-400 to-blue-600' },
   ];
   const unreadCount = threads.filter(th => th.unread).length;
 
@@ -513,23 +543,11 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
 
       <div className="text-center mb-4 space-y-1">
         <h2 className="text-xl font-black tracking-tight text-emerald-400">Kabambe Simulator</h2>
-        <p className="text-xs text-slate-400">Feature phone USSD ({USSD_CODE}) and SMS ({SHORTCODE}) gateway</p>
-      </div>
-
-      <div className="flex space-x-2 mb-5 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 text-xs font-bold">
-        {(['EN', 'SWA'] as const).map(l => (
-          <button
-            key={l}
-            onClick={() => setLang(l)}
-            className={`px-4 py-1.5 rounded-xl transition ${lang === l ? 'bg-sky-600 text-white shadow' : 'text-slate-400'}`}
-          >
-            {l === 'EN' ? 'English' : 'Kiswahili'}
-          </button>
-        ))}
+        <p className="text-xs text-slate-400">USSD ({USSD_CODE}) & SMS ({SHORTCODE}) Gateway [Active Lang: <span className="text-emerald-300 font-bold uppercase">{currentLang}</span>]</p>
       </div>
 
       {/* Phone body */}
-      <div className="w-[300px] rounded-[44px] p-4 pb-5 bg-gradient-to-b from-slate-700 via-slate-800 to-slate-900 border border-slate-600 shadow-[0_30px_80px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.12)] flex flex-col items-center">
+      <div className="w-[300px] rounded-[44px] p-4 pb-5 bg-gradient-to-b from-slate-700 via-slate-800 to-slate-900 border border-slate-600 shadow-[0_30px_80px_rgba(0,0,0,0.7)] flex flex-col items-center">
         <div className="flex items-center space-x-2 mt-1 mb-3">
           <div className="w-1.5 h-1.5 rounded-full bg-slate-950 ring-1 ring-slate-600" />
           <div className="w-16 h-1.5 bg-slate-950 rounded-full ring-1 ring-slate-600" />
@@ -537,7 +555,6 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
 
         {/* Screen */}
         <div className="relative w-full h-[320px] rounded-2xl overflow-hidden border-[5px] border-slate-950 bg-slate-950 shadow-inner flex flex-col">
-          {/* Status bar */}
           <div className="h-6 px-2.5 flex items-center justify-between text-[10px] font-semibold bg-black/40 text-white/90 z-10">
             <span className="flex items-center space-x-1">
               <Signal className="w-3 h-3" />
@@ -549,7 +566,6 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
             </span>
           </div>
 
-          {/* Content */}
           <div className="relative flex-1 min-h-0">
             {screen === 'home' && (
               <div className="absolute inset-0 bg-gradient-to-b from-sky-600 via-cyan-800 to-slate-900 flex flex-col">
@@ -716,7 +732,6 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
           <button
             onClick={soft.lf}
             className="h-9 rounded-full bg-slate-700 hover:bg-slate-600 active:scale-95 text-[10px] font-bold border border-slate-500/50 shadow transition"
-            title="Left soft key"
           >
             ◖
           </button>
@@ -741,7 +756,6 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
           <button
             onClick={soft.rf}
             className="h-9 rounded-full bg-slate-700 hover:bg-slate-600 active:scale-95 text-[10px] font-bold border border-slate-500/50 shadow transition"
-            title="Right soft key"
           >
             ◗
           </button>
@@ -752,14 +766,12 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
           <button
             onClick={handleCall}
             className="w-20 h-10 bg-emerald-600 hover:bg-emerald-500 rounded-full flex items-center justify-center shadow-md transition active:scale-95"
-            title="Call / Send"
           >
             <Phone className="w-5 h-5" />
           </button>
           <button
             onClick={handleEnd}
             className="w-20 h-10 bg-rose-600 hover:bg-rose-500 rounded-full flex items-center justify-center shadow-md transition active:scale-95"
-            title="End / Home"
           >
             <PhoneOff className="w-5 h-5" />
           </button>
@@ -780,11 +792,6 @@ export function FeaturePhoneSimulator({ onBackToHome }: FeaturePhoneSimulatorPro
         </div>
 
         <div className="mt-4 text-[10px] font-black tracking-[0.35em] text-slate-500">KABAMBE</div>
-      </div>
-
-      <div className="mt-5 text-center text-xs text-slate-400 max-w-xs leading-relaxed">
-        Tap the Phone icon, dial <span className="text-white font-bold">{USSD_CODE}</span> and press the green key. Tap Messages to
-        text <span className="text-white font-bold">BAHARI KISUMU</span> to {SHORTCODE}. Your keyboard works too.
       </div>
     </div>
   );
