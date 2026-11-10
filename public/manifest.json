@@ -2,8 +2,17 @@
   "name": "BahariSafe",
   "short_name": "BahariSafe",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0284c7",
-  "description": "Smart Marine Safety for Small-Scale Fishers"
+  "description": "Smart Marine Safety for Small-Scale Fishers",
+  "icons": [
+    {
+      "src": "https://www.pwabuilder.com/assets/images/icon_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
