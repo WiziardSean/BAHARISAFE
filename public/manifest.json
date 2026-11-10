@@ -9,9 +9,9 @@
   "description": "Smart Marine Safety for Small-Scale Fishers",
   "icons": [
     {
-      "src": "https://www.pwabuilder.com/assets/images/icon_512.png",
+      "src": "/fisherman-bg.jpg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any maskable"
     }
   ]
