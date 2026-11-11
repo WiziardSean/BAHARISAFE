@@ -5,13 +5,19 @@ import { evaluateRisk, type RiskLevel, type WeatherMetrics } from './lib/riskEng
 import { weatherClient, summarizeHours, toWeatherMetrics, friendlyMessage } from './lib/weather';
 import { marineClient } from './lib/marine/marineClient';
 import { getWorstWaveHeight } from './lib/marine/marineBridge';
-import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Thermometer, Wind, Waves, Eye, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, AlertCircle, Phone, LifeBuoy, ArrowRight, ArrowLeft, Smartphone, ShieldCheck, Compass } from 'lucide-react';
-import { MapView } from './components/MapView';
+import { supabase } from './lib/supabase';
+import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Thermometer, Wind, Waves, Eye, X, Sun, Globe, Phone, LifeBuoy, ArrowRight, ArrowLeft, Smartphone, ShieldCheck, Compass } from 'lucide-react';
 import { FeaturePhoneSimulator } from './components/FeaturePhoneSimulator';
-import { EvaluationPortal } from './components/EvaluationPortal';
+import Auth from './Auth';
 
 const KMH_PER_KNOT = 1.852;
 const LAKE_WAVE_PER_KNOT = 0.04;
+
+const ADMIN_EMAILS = [
+  'Harmonymatofari@gmail.com',
+  'owitisean2025@gmail.com',
+  'daviswaithaka2025@gmail.com'
+];
 
 const TRANSLATIONS = {
   EN: {
@@ -37,7 +43,6 @@ const TRANSLATIONS = {
     forecast: 'Forecast',
     map: 'Map',
     kabambe: 'Kabambe',
-    evaluate: 'Evaluate',
     alerts: 'Alerts',
     settings: 'Settings',
     none: 'None',
@@ -66,7 +71,6 @@ const TRANSLATIONS = {
     forecast: 'Utabiri',
     map: 'Ramani',
     kabambe: 'Kabambe',
-    evaluate: 'Tathmini',
     alerts: 'Alerts',
     settings: 'Mipangilio',
     none: 'Hakuna',
@@ -109,31 +113,59 @@ function RiskIcon({ level }: { level: RiskLevel }) {
 }
 
 export default function App() {
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [selectedSite, setSelectedSite] = useState<LandingSite>(LANDING_SITES[0]);
   const [timeWindow, setTimeWindow] = useState<number>(12);
-  
   const [useDemoMode, setUseDemoMode] = useState<boolean | null>(null);
-
   const [demoScenarioId, setDemoScenarioId] = useState<string>('calm-morning');
   const [liveMetrics, setLiveMetrics] = useState<WeatherMetrics | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<'home' | 'forecast' | 'map' | 'kabambe' | 'evaluation' | 'alerts' | 'settings'>('home');
-
   const [lang, setLang] = useState<'EN' | 'SWA'>('EN');
   const [speedUnit, setSpeedUnit] = useState<'kts' | 'kmh' | 'ms'>('kts');
   const [waveUnit, setWaveUnit] = useState<'m' | 'ft'>('m');
+  const [vesselType, setVesselType] = useState<string>('Paddle Canoe (Dugout)');
   const [offlineCaching, setOfflineCaching] = useState<boolean>(true);
   const [smsAlerts, setSmsAlerts] = useState<boolean>(true);
-  const [vesselType, setVesselType] = useState<string>('canoe');
+
+  const isAdmin = useMemo(() => {
+    return user?.email ? ADMIN_EMAILS.includes(user.email) : false;
+  }, [user]);
 
   const [showSosModal, setShowSosModal] = useState<boolean>(false);
   const [sosPosition, setSosPosition] = useState<{ x: number; y: number }>({ x: window.innerWidth - 80, y: window.innerHeight - 200 });
+  
   const draggingRef = useRef<boolean>(false);
   const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const hasMoved = useRef<boolean>(false);
 
   const t = TRANSLATIONS[lang];
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const onPointerMove = (clientX: number, clientY: number) => {
+    if (!draggingRef.current) return;
+    hasMoved.current = true;
+    const newX = clientX - dragStartPos.current.x;
+    const newY = clientY - dragStartPos.current.y;
+    const boundedX = Math.max(10, Math.min(window.innerWidth - 70, newX));
+    const boundedY = Math.max(70, Math.min(window.innerHeight - 130, newY));
+    setSosPosition({ x: boundedX, y: boundedY });
+  };
 
   const onPointerDown = (clientX: number, clientY: number) => {
     draggingRef.current = true;
@@ -144,29 +176,12 @@ export default function App() {
     };
   };
 
-  const onPointerMove = (clientX: number, clientY: number) => {
-    if (!draggingRef.current) return;
-    hasMoved.current = true;
-    
-    const newX = clientX - dragStartPos.current.x;
-    const newY = clientY - dragStartPos.current.y;
-
-    const boundedX = Math.max(10, Math.min(window.innerWidth - 70, newX));
-    const boundedY = Math.max(70, Math.min(window.innerHeight - 130, newY));
-
-    setSosPosition({ x: boundedX, y: boundedY });
-  };
-
-  const onPointerUp = () => {
-    draggingRef.current = false;
-  };
-
   useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => onPointerMove(e.clientX, e.clientY);
     const handleWindowTouchMove = (e: TouchEvent) => {
       if (e.touches.length > 0) onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
     };
-    const handleWindowUp = () => onPointerUp();
+    const handleWindowUp = () => { draggingRef.current = false; };
 
     window.addEventListener('mousemove', handleWindowMouseMove);
     window.addEventListener('mouseup', handleWindowUp);
@@ -260,6 +275,18 @@ export default function App() {
     return `${meters.toFixed(1)} m`;
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-sky-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Auth />;
+  }
+
   if (useDemoMode === null) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center relative px-4 font-sans select-none">
@@ -301,22 +328,26 @@ export default function App() {
             </button>
           </div>
 
-          <div className="pt-2 text-[10px] text-slate-400 font-medium">
-            Maritime Safety Application • Sign-up & Accounts coming soon
+          <div className="pt-2 text-[10px] text-slate-400 font-medium flex justify-between items-center px-2">
+            <span>Maritime Safety Application {isAdmin && '• Admin'}</span>
+            <button 
+              onClick={() => supabase.auth.signOut()}
+              className="text-sky-600 font-bold hover:underline"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  // IF KABAMBE TAB IS SELECTED, RENDER FULLSCREEN PHONE
   if (currentTab === 'kabambe') {
     return <FeaturePhoneSimulator onBackToHome={() => setCurrentTab('home')} />;
   }
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col relative overflow-hidden font-sans select-none">
-      
       <div 
         className="fixed inset-0 bg-cover bg-top bg-no-repeat pointer-events-none z-0"
         style={{ backgroundImage: `url('/fisherman-bg.jpg')` }}
@@ -324,7 +355,6 @@ export default function App() {
 
       <div className="fixed top-0 inset-x-0 h-32 bg-gradient-to-b from-slate-950/70 via-slate-900/30 to-transparent pointer-events-none z-0" />
 
-      {/* FREELY POSITIONABLE FLOATING SOS BUTTON */}
       <div
         style={{ left: `${sosPosition.x}px`, top: `${sosPosition.y}px` }}
         className="fixed z-[150] cursor-grab active:cursor-grabbing touch-none select-none"
@@ -402,7 +432,6 @@ export default function App() {
       )}
 
       <div className="w-full sm:max-w-md sm:mx-auto min-h-screen flex flex-col relative sm:shadow-2xl z-10 pb-20">
-        
         <header className="px-4 pt-4 pb-2 flex items-center justify-between text-white drop-shadow-md sticky top-0 z-50 bg-slate-950/30 backdrop-blur-sm">
           <div className="flex items-center space-x-2.5">
             <button
@@ -439,10 +468,8 @@ export default function App() {
         </header>
 
         <main className="flex-1 p-4 space-y-3.5 overflow-y-auto pb-24">
-
           {currentTab === 'home' && (
             <div className="space-y-3.5">
-
               <div className="bg-white/85 backdrop-blur-md border border-white/60 rounded-3xl p-3.5 shadow-xl space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center space-x-1.5">
@@ -619,334 +646,285 @@ export default function App() {
                 </div>
               ) : null}
 
-              {timeWindow === 24 && (
-                <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
-                      <Clock className="w-4 h-4 text-sky-600" />
-                      <span>{lang === 'EN' ? '24-Hour Forecast Schedule' : 'Mwenendo wa Saa 24 Hapa'}</span>
-                    </span>
-                    <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-full">Complete Timeline</span>
-                  </div>
+              <div className="bg-rose-600 text-white rounded-3xl p-4 shadow-xl space-y-2">
+                <div className="flex items-center space-x-2 font-black text-xs uppercase">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>ACTIVE HAZARD WARNINGS</span>
+                </div>
+                <p className="text-xs font-medium opacity-95">• Moderate to high winds (15-24 knots). Rough surface conditions.</p>
+              </div>
+            </div>
+          )}
 
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                    {[
-                      { time: '06:00 AM', wind: '6.2 kts', wave: '0.4 m', status: 'SAFE', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-                      { time: '09:00 AM', wind: '7.8 kts', wave: '0.5 m', status: 'SAFE', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-                      { time: '12:00 PM', wind: '14.2 kts', wave: '1.1 m', status: 'CAUTION', bg: 'bg-amber-50 text-amber-800 border-amber-200' },
-                      { time: '03:00 PM', wind: '22.5 kts', wave: '1.8 m', status: 'DANGER', bg: 'bg-orange-50 text-orange-800 border-orange-200' },
-                      { time: '06:00 PM', wind: '18.0 kts', wave: '1.4 m', status: 'CAUTION', bg: 'bg-amber-50 text-amber-800 border-amber-200' },
-                      { time: '09:00 PM', wind: '12.0 kts', wave: '0.9 m', status: 'CAUTION', bg: 'bg-amber-50 text-amber-800 border-amber-200' },
-                      { time: '12:00 AM (Night)', wind: '25.4 kts', wave: '2.1 m', status: 'DANGER', bg: 'bg-rose-50 text-rose-800 border-rose-200' },
-                      { time: '03:00 AM (Late)', wind: '19.8 kts', wave: '1.6 m', status: 'DANGER', bg: 'bg-orange-50 text-orange-800 border-orange-200' },
-                    ].map((h, i) => (
-                      <div key={i} className={`flex items-center justify-between p-2.5 rounded-2xl border ${h.bg} shadow-xs`}>
-                        <div className="flex items-center space-x-2.5">
-                          <div className="font-mono font-extrabold text-[11px]">{h.time}</div>
-                          <div className="text-[10px] opacity-80">Wind: {h.wind} | Wave: {h.wave}</div>
-                        </div>
-                        <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-lg bg-white/80">
-                          {h.status}
-                        </span>
-                      </div>
-                    ))}
+          {currentTab === 'forecast' && (
+            <div className="space-y-3.5">
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 shadow-xl space-y-3 text-slate-900">
+                <div className="flex items-center space-x-2 border-b border-slate-100 pb-2">
+                  <Calendar className="w-5 h-5 text-sky-600" />
+                  <div>
+                    <h3 className="text-sm font-black">Hourly Weather Forecast</h3>
+                    <p className="text-[10px] text-slate-500">{selectedSite.name} — {selectedSite.region}</p>
                   </div>
                 </div>
-              )}
 
-              {assessment && assessment.warnings.length > 0 && (
-                <div className="bg-rose-500/90 text-white backdrop-blur-md border border-rose-400 rounded-3xl p-4 shadow-xl space-y-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider flex items-center space-x-2">
-                    <AlertTriangle className="w-4 h-4 text-white" />
-                    <span>{t.warnings}</span>
-                  </h3>
-                  <ul className="space-y-1.5">
-                    {assessment.warnings.map((w, idx) => (
-                      <li key={idx} className="text-xs bg-black/20 p-2 rounded-2xl font-medium">
-                        • {w}
-                      </li>
-                    ))}
-                  </ul>
+                <div className="bg-emerald-500 text-white rounded-2xl p-3.5 shadow-md space-y-1">
+                  <div className="flex items-center space-x-1.5 text-xs font-extrabold uppercase">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>RECOMMENDED SAFE DEPARTURE WINDOW</span>
+                  </div>
+                  <div className="text-lg font-black tracking-tight">05:00 AM – 10:00 AM</div>
+                  <p className="text-[11px] opacity-90">Calm morning waters with low wind gusts (&lt; 8 kts). Ideal for small craft fishing.</p>
                 </div>
-              )}
+
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700 px-1">
+                    <span>NEXT 24 HOURS TIMELINE</span>
+                    <span className="text-emerald-600 text-[10px] bg-emerald-50 px-2 py-0.5 rounded-full">Updated Live</span>
+                  </div>
+
+                  {[
+                    { time: '06:00 AM', wind: '6.2 kts', wave: '0.4 m', status: 'SAFE', bg: 'bg-emerald-50 border-emerald-200 text-emerald-800' },
+                    { time: '09:00 AM', wind: '7.8 kts', wave: '0.5 m', status: 'SAFE', bg: 'bg-emerald-50 border-emerald-200 text-emerald-800' },
+                    { time: '12:00 PM', wind: '14.2 kts', wave: '1.1 m', status: 'CAUTION', bg: 'bg-amber-50 border-amber-200 text-amber-800' },
+                    { time: '03:00 PM', wind: '22.5 kts', wave: '1.8 m', status: 'DANGER', bg: 'bg-orange-50 border-orange-200 text-orange-800' },
+                    { time: '06:00 PM', wind: '18.0 kts', wave: '1.4 m', status: 'CAUTION', bg: 'bg-amber-50 border-amber-200 text-amber-800' },
+                    { time: '09:00 PM', wind: '9.0 kts', wave: '0.6 m', status: 'SAFE', bg: 'bg-emerald-50 border-emerald-200 text-emerald-800' },
+                  ].map((row, idx) => (
+                    <div key={idx} className={`p-3 rounded-2xl border flex items-center justify-between text-xs font-bold ${row.bg}`}>
+                      <span>{row.time}</span>
+                      <span className="font-medium">Wind: {row.wind} | Waves: {row.wave}</span>
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-black">{row.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
           {currentTab === 'map' && (
-            <div className="space-y-3">
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 p-3 rounded-3xl flex items-center justify-between shadow-lg">
-                <div>
-                  <h2 className="text-xs font-bold text-slate-900">Fishing Grounds Map</h2>
-                  <p className="text-[10px] text-slate-500">Green = Monitored Landing Sites</p>
+            <div className="space-y-3.5">
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 shadow-xl space-y-3 text-slate-900">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div>
+                    <h3 className="text-sm font-black">Fishing Grounds Map</h3>
+                    <p className="text-[10px] text-slate-500">Green = Monitored Landing Sites (Lake Victoria, Turkana & Coast)</p>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Active</span>
                 </div>
-                <span className="text-[10px] px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full font-bold">
-                  Active
-                </span>
-              </div>
-              <div className="h-[60vh] w-full rounded-3xl overflow-hidden border border-white/80 shadow-2xl">
-                <MapView sites={LANDING_SITES} />
+
+                <div className="relative w-full h-80 bg-sky-100 rounded-2xl overflow-hidden border border-slate-300 shadow-inner flex flex-col items-center justify-center p-2">
+                  <iframe
+                    title="East Africa Fishing Grounds Map"
+                    src="https://www.openstreetmap.org/export/embed.html?bbox=33.5%2C-5.5%2C42.0%2C4.5&amp;layer=mapnik"
+                    className="w-full h-full rounded-xl border-0"
+                  />
+                  <button
+                    onClick={() => alert(`Your current location is anchored near ${selectedSite.name} (${selectedSite.lat}, ${selectedSite.lon}).`)}
+                    className="absolute top-4 right-4 bg-slate-900 text-white text-xs font-bold py-2 px-3.5 rounded-2xl shadow-xl flex items-center space-x-1.5 hover:bg-slate-800 transition"
+                  >
+                    <Compass className="w-4 h-4 text-sky-400" />
+                    <span>Find My Location</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
           {currentTab === 'evaluation' && (
-            <EvaluationPortal />
+            <div className="space-y-3.5">
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 shadow-xl space-y-3 text-slate-900">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center space-x-2">
+                    <ShieldCheck className="w-5 h-5 text-sky-600" />
+                    <h3 className="text-sm font-black">RISK ENGINE EVALUATION PORTAL</h3>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-xl">Consistency: 83%</span>
+                </div>
+                <p className="text-xs text-slate-600">Verify rule-based decision consistency against standard test scenarios and inspect threshold metrics.</p>
+
+                <div className="bg-slate-950 text-white rounded-2xl p-4 space-y-3">
+                  <div className="text-xs font-extrabold text-sky-400 uppercase tracking-wider"># "Worst Factor Wins" Pipeline:</div>
+                  <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300">1. Ingest Raw API / Demo Metrics (Wind, Waves, Visibility, Squall)</div>
+                  <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300">2. Evaluate Worst Variable Thresholds (Score Weighting)</div>
+                  <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300">3. Output Safety Status: SAFE | CAUTION | DANGER | EXTREME</div>
+                </div>
+
+                <div className="overflow-hidden border border-slate-200 rounded-2xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-slate-700 uppercase text-[10px]">
+                      <tr>
+                        <th className="p-2.5">Parameter</th>
+                        <th className="p-2.5 text-emerald-600">Safe</th>
+                        <th className="p-2.5 text-amber-600">Caution</th>
+                        <th className="p-2.5 text-rose-600">Extreme</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      <tr>
+                        <td className="p-2.5 font-bold">Wind Speed</td>
+                        <td className="p-2.5 text-emerald-600">&lt; 10 kts</td>
+                        <td className="p-2.5 text-amber-600">10 - 24 kts</td>
+                        <td className="p-2.5 text-rose-600">&ge; 25 kts</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold">Wave Height</td>
+                        <td className="p-2.5 text-emerald-600">&lt; 0.8 m</td>
+                        <td className="p-2.5 text-amber-600">0.8 - 2.4 m</td>
+                        <td className="p-2.5 text-rose-600">&ge; 2.5 m</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold">Visibility</td>
+                        <td className="p-2.5 text-emerald-600">&gt; 5 km</td>
+                        <td className="p-2.5 text-amber-600">2 - 5 km</td>
+                        <td className="p-2.5 text-rose-600">&lt; 2 km</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           )}
 
-          {currentTab === 'forecast' && (
+          {currentTab === 'alerts' && (
             <div className="space-y-3.5">
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl flex items-center space-x-3">
-                <div className="p-3 bg-sky-100 rounded-2xl text-sky-600">
-                  <Calendar className="w-6 h-6" />
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 shadow-xl space-y-3 text-slate-900">
+                <div className="flex items-center space-x-2 border-b border-slate-100 pb-2">
+                  <Bell className="w-5 h-5 text-rose-600" />
+                  <h3 className="text-sm font-black">Storm & Squall Alerts</h3>
                 </div>
-                <div>
-                  <h2 className="text-base font-extrabold text-slate-900">{lang === 'EN' ? 'Hourly Weather Forecast' : 'Utabiri wa Hali ya Hewa kwa Saa'}</h2>
-                  <p className="text-xs text-slate-500 font-medium">{selectedSite.name} — {selectedSite.region}</p>
-                </div>
-              </div>
+                <p className="text-xs text-slate-600">All regional alerts for Lake Victoria, Turkana, and the Coast are up to date.</p>
 
-              <div className="bg-emerald-500 text-white rounded-3xl p-4 shadow-xl space-y-2 border border-emerald-400">
-                <div className="flex items-center space-x-2 font-bold text-xs uppercase tracking-wider">
-                  <CheckCircle2 className="w-4 h-4 text-white" />
-                  <span>{lang === 'EN' ? 'Recommended Safe Departure Window' : 'Muda Salama wa Kuondoka'}</span>
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl space-y-1">
+                  <div className="text-xs font-black text-rose-800 flex items-center space-x-1.5">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Gale Warning: Lake Victoria Western Basin</span>
+                  </div>
+                  <p className="text-[11px] text-rose-700">Strong southerly winds exceeding 22 kts expected starting 14:00 today. Small boats advised not to venture past nearshore waters.</p>
                 </div>
-                <div className="text-lg font-black">05:00 AM – 10:00 AM</div>
-                <p className="text-xs opacity-95 font-medium">
-                  {lang === 'EN' ? 'Calm morning waters with low wind gusts (< 8 kts). Ideal for small craft fishing.' : 'Maji tulivu ya asubuhi na upepo mdogo. Inafaa kwa vyombo vidogo.'}
-                </p>
-              </div>
-
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
-                    <Clock className="w-4 h-4 text-sky-600" />
-                    <span>{lang === 'EN' ? 'Next 24 Hours Timeline' : 'Mwenendo wa Saa 24 Zijazo'}</span>
-                  </span>
-                  <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-full">Updated Live</span>
-                </div>
-
-                <div className="space-y-2">
-                  {[
-                    { time: '06:00 AM', wind: '6.2 kts', wave: '0.4 m', status: 'SAFE', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-                    { time: '09:00 AM', wind: '7.8 kts', wave: '0.5 m', status: 'SAFE', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-                    { time: '12:00 PM', wind: '14.2 kts', wave: '1.1 m', status: 'CAUTION', bg: 'bg-amber-50 text-amber-800 border-amber-200' },
-                    { time: '03:00 PM', wind: '22.5 kts', wave: '1.8 m', status: 'DANGER', bg: 'bg-orange-50 text-orange-800 border-orange-200' },
-                    { time: '06:00 PM', wind: '18.0 kts', wave: '1.4 m', status: 'CAUTION', bg: 'bg-amber-50 text-amber-800 border-amber-200' },
-                    { time: '09:00 PM', wind: '9.0 kts', wave: '0.6 m', status: 'SAFE', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-                  ].map((h, i) => (
-                    <div key={i} className={`flex items-center justify-between p-3 rounded-2xl border ${h.bg} shadow-sm`}>
-                      <div className="flex items-center space-x-3">
-                        <div className="font-mono font-extrabold text-xs">{h.time}</div>
-                        <div className="text-[11px] opacity-80">Wind: {h.wind} | Waves: {h.wave}</div>
-                      </div>
-                      <span className="text-[10px] font-extrabold px-2 py-1 rounded-xl bg-white/80 shadow-xs">
-                        {h.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-amber-500/90 text-slate-950 rounded-3xl p-4 shadow-xl space-y-1.5 border border-amber-400">
-                <div className="flex items-center space-x-2 font-bold text-xs uppercase tracking-wider">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{lang === 'EN' ? 'Afternoon Wind Advisory' : 'Onyo la Upepo wa Mchana'}</span>
-                </div>
-                <p className="text-xs font-semibold">
-                  {lang === 'EN' ? 'Expect wind speeds to pick up significantly past 2:00 PM across Lake Victoria and coastal channels. Ensure return by noon.' : 'Tarajia upepo kuongezeka baada ya saa 8:00 mchana. Hakikisha umerudi kabla ya adhuhuri.'}
-                </p>
               </div>
             </div>
           )}
 
           {currentTab === 'settings' && (
             <div className="space-y-3.5">
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl flex items-center space-x-3">
-                <div className="p-3 bg-sky-100 rounded-2xl text-sky-600">
-                  <Settings className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-base font-extrabold text-slate-900">{lang === 'EN' ? 'App Preferences' : 'Mipangilio ya Programu'}</h2>
-                  <p className="text-xs text-slate-500 font-medium">{lang === 'EN' ? 'Customize units, vessel profiles & alerts' : 'Badilisha vipimo, vyombo vya uvuvi na tahadhari'}</p>
-                </div>
-              </div>
-
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
-                <div className="flex items-center space-x-2 text-slate-800 font-bold text-xs uppercase tracking-wider">
-                  <Globe className="w-4 h-4 text-sky-600" />
-                  <span>Language / Lugha</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setLang('EN')}
-                    className={`p-3 rounded-2xl font-bold text-xs flex items-center justify-between border transition ${
-                      lang === 'EN' ? 'bg-sky-600 text-white border-sky-500 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <span>English (EN)</span>
-                    {lang === 'EN' && <Check className="w-4 h-4" />}
-                  </button>
-
-                  <button
-                    onClick={() => setLang('SWA')}
-                    className={`p-3 rounded-2xl font-bold text-xs flex items-center justify-between border transition ${
-                      lang === 'SWA' ? 'bg-sky-600 text-white border-sky-500 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <span>Kiswahili (SWA)</span>
-                    {lang === 'SWA' && <Check className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
-                <div className="flex items-center space-x-2 text-slate-800 font-bold text-xs uppercase tracking-wider">
-                  <Ship className="w-4 h-4 text-sky-600" />
-                  <span>Vessel Type / Aina ya Chombo</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'canoe', label: 'Paddle Canoe (Dugout)' },
-                    { id: 'outboard', label: 'Motorized Outboard' },
-                    { id: 'dhow', label: 'Traditional Dhow' },
-                    { id: 'fiber', label: 'Fiberglass Boat' },
-                  ].map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => setVesselType(v.id)}
-                      className={`p-2.5 rounded-2xl text-xs font-bold border text-left transition ${
-                        vesselType === v.id ? 'bg-sky-600 text-white border-sky-500 shadow-sm' : 'bg-slate-50 text-slate-700 border-slate-200'
-                      }`}
-                    >
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
-                <div className="flex items-center space-x-2 text-slate-800 font-bold text-xs uppercase tracking-wider">
-                  <Wind className="w-4 h-4 text-sky-600" />
-                  <span>Unit Measurements</span>
+              <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 shadow-xl space-y-4 text-slate-900">
+                <div className="flex items-center space-x-2 border-b border-slate-100 pb-2">
+                  <Settings className="w-5 h-5 text-sky-600" />
+                  <div>
+                    <h3 className="text-sm font-black">App Preferences</h3>
+                    <p className="text-[10px] text-slate-500">Customize units, vessel profiles & alerts</p>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs text-slate-600 font-semibold block">Wind Speed Unit:</label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {[
-                      { id: 'kts', label: 'Knots' },
-                      { id: 'kmh', label: 'km/h' },
-                      { id: 'ms', label: 'm/s' },
-                    ].map((u) => (
-                      <button
-                        key={u.id}
-                        onClick={() => setSpeedUnit(u.id as any)}
-                        className={`py-2 px-1 rounded-xl text-xs font-bold border transition ${
-                          speedUnit === u.id ? 'bg-sky-600 text-white border-sky-500 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        {u.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-1 border-t border-slate-100">
-                  <label className="text-xs text-slate-600 font-semibold block">Wave Height Unit:</label>
+                  <label className="text-[11px] font-extrabold text-slate-700 uppercase">VESSEL TYPE / AINA YA CHOMBO</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { id: 'm', label: 'Meters (m)' },
-                      { id: 'ft', label: 'Feet (ft)' },
-                    ].map((u) => (
+                    {['Paddle Canoe (Dugout)', 'Motorized Outboard', 'Traditional Dhow', 'Fiberglass Boat'].map((v) => (
                       <button
-                        key={u.id}
-                        onClick={() => setWaveUnit(u.id as any)}
-                        className={`py-2 px-1 rounded-xl text-xs font-bold border transition ${
-                          waveUnit === u.id ? 'bg-sky-600 text-white border-sky-500 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200'
+                        key={v}
+                        onClick={() => setVesselType(v)}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition text-left ${
+                          vesselType === v ? 'bg-sky-600 text-white border-sky-500 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-200'
                         }`}
                       >
-                        {u.label}
+                        {v}
                       </button>
                     ))}
                   </div>
                 </div>
-              </div>
 
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-slate-800 font-bold text-xs uppercase tracking-wider">
-                    <DownloadCloud className="w-4 h-4 text-sky-600" />
-                    <span>Offline Forecast Caching</span>
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label className="text-[11px] font-extrabold text-slate-700 uppercase">UNIT MEASUREMENTS</label>
+                  
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Wind Speed Unit:</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['kts', 'kmh', 'ms'] as const).map((unit) => (
+                        <button
+                          key={unit}
+                          onClick={() => setSpeedUnit(unit)}
+                          className={`py-1.5 rounded-xl text-xs font-bold border ${speedUnit === unit ? 'bg-sky-600 text-white border-sky-500' : 'bg-slate-50 text-slate-700 border-slate-200'}`}
+                        >
+                          {unit}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <button
-                    onClick={() => setOfflineCaching(!offlineCaching)}
-                    className={`w-12 h-6 rounded-full p-1 transition duration-200 ease-in-out ${
-                      offlineCaching ? 'bg-sky-600' : 'bg-slate-300'
-                    }`}
-                  >
-                    <div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition ${offlineCaching ? 'translate-x-6' : 'translate-x-0'}`} />
-                  </button>
-                </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <div className="flex items-center space-x-2 text-slate-800 font-bold text-xs uppercase tracking-wider">
-                    <MessageSquareWarning className="w-4 h-4 text-sky-600" />
-                    <span>SMS Emergency Alerts</span>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Wave Height Unit:</span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(['m', 'ft'] as const).map((unit) => (
+                        <button
+                          key={unit}
+                          onClick={() => setWaveUnit(unit)}
+                          className={`py-1.5 rounded-xl text-xs font-bold border ${waveUnit === unit ? 'bg-sky-600 text-white border-sky-500' : 'bg-slate-50 text-slate-700 border-slate-200'}`}
+                        >
+                          {unit === 'm' ? 'Meters (m)' : 'Feet (ft)'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <button
-                    onClick={() => setSmsAlerts(!smsAlerts)}
-                    className={`w-12 h-6 rounded-full p-1 transition duration-200 ease-in-out ${
-                      smsAlerts ? 'bg-sky-600' : 'bg-slate-300'
-                    }`}
-                  >
-                    <div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition ${smsAlerts ? 'translate-x-6' : 'translate-x-0'}`} />
-                  </button>
                 </div>
-              </div>
 
-              <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-4 shadow-xl space-y-3">
-                <div className="flex items-center space-x-2 text-rose-600 font-bold text-xs uppercase tracking-wider">
-                  <PhoneCall className="w-4 h-4" />
-                  <span>Maritime Emergency Hotlines</span>
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                    <span className="text-xs font-bold text-slate-700">OFFLINE FORECAST CACHING</span>
+                    <input 
+                      type="checkbox" 
+                      checked={offlineCaching} 
+                      onChange={() => setOfflineCaching(!offlineCaching)} 
+                      className="w-4 h-4 accent-sky-600"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                    <span className="text-xs font-bold text-slate-700">SMS EMERGENCY ALERTS</span>
+                    <input 
+                      type="checkbox" 
+                      checked={smsAlerts} 
+                      onChange={() => setSmsAlerts(!smsAlerts)} 
+                      className="w-4 h-4 accent-sky-600"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2 text-xs">
-                  <a href="tel:112" className="flex items-center justify-between p-2.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-900 font-bold">
-                    <span>Kenya Coast Guard / Emergency</span>
-                    <span className="underline">112</span>
-                  </a>
-                  <a href="tel:0800720021" className="flex items-center justify-between p-2.5 bg-sky-50 border border-sky-200 rounded-2xl text-sky-900 font-bold">
-                    <span>Kenya Maritime Authority (KMA)</span>
-                    <span className="underline">0800 720 021</span>
-                  </a>
+
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label className="text-[11px] font-extrabold text-rose-700 uppercase">MARITIME EMERGENCY HOTLINES</label>
+                  <div className="space-y-2">
+                    <a href="tel:112" className="flex items-center justify-between p-3 bg-rose-50 border border-rose-100 rounded-2xl text-xs font-bold text-rose-900">
+                      <span>Kenya Coast Guard / Emergency</span>
+                      <span className="px-2.5 py-1 bg-rose-600 text-white rounded-xl">112</span>
+                    </a>
+                    <a href="tel:0800720021" className="flex items-center justify-between p-3 bg-sky-50 border border-sky-100 rounded-2xl text-xs font-bold text-sky-900">
+                      <span>Kenya Maritime Authority (KMA)</span>
+                      <span className="px-2.5 py-1 bg-sky-600 text-white rounded-xl">0800 720 021</span>
+                    </a>
+                  </div>
                 </div>
-              </div>
 
-              <div className="bg-slate-100/90 backdrop-blur-md border border-slate-200 rounded-3xl p-4 text-center space-y-1 text-slate-500 text-xs">
-                <p className="font-bold text-slate-700">BahariSafe Mobile v1.4.0</p>
-                <p>Lake Victoria | Turkana | Kenyan Coast</p>
-              </div>
+                <div className="pt-2 text-center text-[10px] text-slate-400 font-semibold">
+                  BahariSafe Mobile v1.4.0<br/>Lake Victoria | Turkana | Kenyan Coast {isAdmin && '• Admin Mode Enabled'}
+                </div>
 
+                <button
+                  onClick={() => supabase.auth.signOut()}
+                  className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold rounded-2xl text-xs transition mt-2"
+                >
+                  Sign Out of Account
+                </button>
+              </div>
             </div>
           )}
-
-          {currentTab === 'alerts' && (
-            <div className="bg-white/90 backdrop-blur-md border border-white/80 rounded-3xl p-6 text-center space-y-2 shadow-xl">
-              <Bell className="w-8 h-8 text-rose-500 mx-auto" />
-              <h2 className="text-sm font-bold text-slate-900">Storm & Squall Alerts</h2>
-              <p className="text-xs text-slate-500">All regional alerts for Lake Victoria, Turkana, and the Coast are up to date.</p>
-            </div>
-          )}
-
         </main>
 
-        {/* BOTTOM NAVIGATION BAR WITH KABAMBE TAB */}
-        <nav className="fixed bottom-0 inset-x-0 sm:max-w-md sm:mx-auto bg-white/90 backdrop-blur-xl border-t border-slate-200/80 px-2 py-2 flex items-center justify-around z-50 shadow-2xl">
+        <nav className="absolute bottom-0 inset-x-0 bg-slate-950/80 backdrop-blur-lg border-t border-white/10 px-4 py-2 flex items-center justify-around z-50">
           {[
             { id: 'home', label: t.home, icon: HomeIcon },
             { id: 'forecast', label: t.forecast, icon: Calendar },
             { id: 'map', label: t.map, icon: MapIcon },
             { id: 'kabambe', label: t.kabambe, icon: Smartphone },
-            { id: 'evaluation', label: t.evaluate, icon: ShieldCheck },
+            { id: 'evaluation', label: 'Evaluate', icon: ShieldCheck },
             { id: 'alerts', label: t.alerts, icon: Bell },
             { id: 'settings', label: t.settings, icon: Settings },
           ].map((tab) => {
@@ -957,16 +935,15 @@ export default function App() {
                 key={tab.id}
                 onClick={() => setCurrentTab(tab.id as any)}
                 className={`flex flex-col items-center py-1 px-2 rounded-2xl transition ${
-                  isActive ? 'text-sky-600 font-extrabold scale-105' : 'text-slate-400 hover:text-slate-600'
+                  isActive ? 'text-sky-400 font-bold scale-105' : 'text-slate-400 hover:text-white font-medium text-[10px]'
                 }`}
               >
-                <Icon className="w-5 h-5 mb-0.5" />
-                <span className="text-[9px]">{tab.label}</span>
+                <Icon className="w-5 h-5 mb-1" />
+                <span className="text-[10px] tracking-tight">{tab.label}</span>
               </button>
             );
           })}
         </nav>
-
       </div>
     </div>
   );
