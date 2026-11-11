@@ -5,7 +5,7 @@ import { evaluateRisk, type RiskLevel, type WeatherMetrics } from './lib/riskEng
 import { weatherClient, summarizeHours, toWeatherMetrics, friendlyMessage } from './lib/weather';
 import { marineClient } from './lib/marine/marineClient';
 import { getWorstWaveHeight } from './lib/marine/marineBridge';
-import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Thermometer, Wind, Waves, Eye, X, Sun, Globe, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Check, Clock, AlertCircle, Phone, LifeBuoy, ArrowRight, ArrowLeft, Smartphone, ShieldCheck, Compass } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, AlertTriangle, OctagonAlert, Anchor, Wifi, Loader2, Map as MapIcon, Home as HomeIcon, Bell, Settings, Calendar, Thermometer, Wind, Waves, Eye, X, Sun, PhoneCall, DownloadCloud, Ship, MessageSquareWarning, Clock, AlertCircle, Phone, LifeBuoy, ArrowRight, ArrowLeft, Smartphone, ShieldCheck, Compass } from 'lucide-react';
 import { MapView } from './components/MapView';
 import { FeaturePhoneSimulator } from './components/FeaturePhoneSimulator';
 import { EvaluationPortal } from './components/EvaluationPortal';
